@@ -31,4 +31,4 @@ services:
     working_dir: /app
     environment:
       - WATCHPACK_POLLING=true
-    command: npm run dev # ViteやNext.jsの起動コマンド
+    command: sh -c "npm install && npm run dev" # 依存関係をインストールしてから起動
