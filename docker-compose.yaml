@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: myapp
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data # データを永続化
+
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app # ローカルの変更を即座に反映
+    environment:
+      # DBへの接続情報（ホスト名はサービス名の "db" になる）
+      DB_SOURCE: "postgresql://user:password@db:5432/myapp?sslmode=disable"
+    depends_on:
+      - db
+
+  frontend:
+    image: node:20-alpine
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "3000:3000"
+    working_dir: /app
+    command: npm run dev # ViteやNext.jsの起動コマンド
