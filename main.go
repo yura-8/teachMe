@@ -1,10 +1,12 @@
 package main
 
 import (
-    "teachMe/db"
-    "net/http"
-    "github.com/labstack/echo/v4"
-		_ "github.com/lib/pq"
+	"net/http"
+	"teachMe/db"
+	"teachMe/model"
+
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 func main() {
@@ -14,6 +16,12 @@ func main() {
 
 	// Echoのインスタンスを作成
 	e := echo.New()
+
+	// CORSの設定
+e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+    AllowOrigins: []string{"http://localhost:3000"},
+    AllowMethods: []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete},
+}))
 
 	// ルーティング
 	// http://localhost:8080/
