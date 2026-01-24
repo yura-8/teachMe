@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: myapp
+      POSTGRES_DB: teachme
     ports:
       - "5432:5432"
     volumes:
@@ -18,7 +18,7 @@ services:
       - .:/app # ローカルの変更を即座に反映
     environment:
       # DBへの接続情報（ホスト名はサービス名の "db" になる）
-      DB_SOURCE: "postgresql://user:password@db:5432/myapp?sslmode=disable"
+      DB_SOURCE: "postgresql://user:password@db:5432/teachme?sslmode=disable"
     depends_on:
       - db
 
