@@ -1,29 +1,29 @@
 package db
 
 import (
-    "database/sql"
-    "fmt"
-    "os"
-    "time"
+	"fmt"
+	"os"
+	"time"
 
-    _ "github.com/lib/pq"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-// データベースを初期化し、接続オブジェクトを返す
-func InitDB() *sql.DB {
-    dsn := os.Getenv("DB_SOURCE")
-    var db *sql.DB
-    var err error
+func InitDB() *gorm.DB {
+	dsn := os.Getenv("DB_SOURCE")
+	var db *gorm.DB
+	var err error
 
-    for i := 0; i < 10; i++ {
-        db, err = sql.Open("postgres", dsn)
-        if err == nil && db.Ping() == nil {
-            fmt.Println("✅ データベース接続成功！")
-            return db
-        }
-        fmt.Printf("DB接続待機中... (%d/10)\n", i+1)
-        time.Sleep(2 * time.Second)
-    }
+	for i := 0; i < 10; i++ {
+		// sql.Open ではなく gorm.Open を使う
+		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+		if err == nil {
+			fmt.Println("✅ データベース接続成功！(GORM)")
+			return db
+		}
+		fmt.Printf("DB接続待機中... (%d/10)\n", i+1)
+		time.Sleep(2 * time.Second)
+	}
 
-    panic("データベースに接続できませんでした")
+	panic("データベースに接続できませんでした")
 }
