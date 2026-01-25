@@ -41,7 +41,7 @@ func main() {
 	})
 
 	// 文章生成をするエンドポイント
-	e.GET("generate", func(c echo.Context) error {
+	e.GET("/generate", func(c echo.Context) error {
 		// handlerを呼び出して文章生成を行う
 		handler.TextGenerationHandler(c.Response(), c.Request())
 		return nil
