@@ -1,38 +1,64 @@
 import { signIn, auth, signOut } from "@/auth";
+import Image from "next/image";
+import styles from "./login.module.css";
 
 export default async function Home() {
   const session = await auth();
 
-  console.log(session);
-
   return (
-    <>
+    <div className={styles.loginWrapper}>
       {session !== null ? (
-        <>
+        <div className={styles.loggedIn}>
           <h1>{session.user?.name}がログインしたよ</h1>
-          <img src={session.user?.image as string} alt="user image" />
+
+          {session.user?.image && (
+            <Image
+              src={session.user.image}
+              alt="user image"
+              width={80}
+              height={80}
+              className={styles.avatar}
+            />
+          )}
+
           <form
             action={async () => {
               "use server";
               await signOut();
             }}
           >
-            <button type="submit">Signout</button>
+            <button type="submit" className={styles.signOutButton}>
+              Sign out
+            </button>
           </form>
-        </>
+        </div>
       ) : (
-        <>
-          <h1>ログインしてね</h1>
-          <form
-            action={async () => {
-              "use server";
-              await signIn("google");
-            }}
-          >
-            <button type="submit">Signin with Google</button>
-          </form>
-        </>
+        <form
+          action={async () => {
+            "use server";
+            await signIn("google");
+          }}
+        >
+          <button type="submit" className={styles.gsiMaterialButton}>
+            <div className={styles.gsiMaterialButtonState}></div>
+
+            <div className={styles.gsiMaterialButtonContentWrapper}>
+              <div className={styles.gsiMaterialButtonIcon}>
+                <Image
+                  src="/googleicon.png"
+                  alt="Google icon"
+                  width={60}
+                  height={60}
+                />
+              </div>
+
+              <span className={styles.gsiMaterialButtonContents}>
+               Googleでログインして始める。
+              </span>
+            </div>
+          </button>
+        </form>
       )}
-    </>
+    </div>
   );
 }
