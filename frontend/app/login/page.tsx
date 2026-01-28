@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 
 export default async function Home() {
   const session = await auth();
-
   if (session) {
     redirect("/kambe");
   }
@@ -14,7 +13,8 @@ export default async function Home() {
       <form
         action={async () => {
           "use server";
-          await signIn("google");
+          // Googleでログインして /kambe に遷移
+          await signIn("google", { redirectTo: "/kambe" });
         }}
       >
         <button type="submit" className={styles.gsiMaterialButton}>
