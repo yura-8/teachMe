@@ -1,5 +1,5 @@
 import { signIn, auth, signOut } from "@/auth";
-import Image from "next/image";
+//import Image from "next/image";
 import styles from "./login.module.css";
 
 export default async function Home() {
@@ -12,7 +12,7 @@ export default async function Home() {
           <h1>{session.user?.name}がログインしたよ</h1>
 
           {session.user?.image && (
-            <Image
+            <img
               src={session.user.image}
               alt="user image"
               width={80}
@@ -44,11 +44,11 @@ export default async function Home() {
 
             <div className={styles.gsiMaterialButtonContentWrapper}>
               <div className={styles.gsiMaterialButtonIcon}>
-                <Image
-                  src="/googleicon.png"
+                <img
+                  src="/googleicon.svg"
                   alt="Google icon"
-                  width={60}
-                  height={60}
+                  width={80}
+                  height={80}
                 />
               </div>
 
