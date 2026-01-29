@@ -6,28 +6,26 @@ import (
 	"net/http"
 
 	"github.com/joho/godotenv"
+	"github.com/labstack/echo/v4"
 	"google.golang.org/genai"
 )
 
-func generateText(useGemini bool, prompt string, w http.ResponseWriter) string {
-	if useGemini {
-		fmt.Fprint(w, "Using Gemini API for text generation...\n")
-		// Gemini APIを使った文章生成
-		// .envファイルを読み込む
-		err := godotenv.Load()
-		if err != nil {
-			return "Error loading .env file"
-		}
+// API Usage Example:
+// POST: http://localhost:8080/generate
+// Body: {"prompt":"Hello, world!","useGemini":true}
+// Output: {"prompt":"Hello, world!","useGemini":true,"text":"Generated text..."}
 
-		fmt.Fprint(w, "loaded .env file\n")
+func generateText(useGemini bool, prompt string) (string, error) {
+	if useGemini {
+		// Gemini APIを使った文章生成
+		// .env はローカル開発用。環境変数が既にセットされているケースもあるので失敗しても続行する。
+		_ = godotenv.Load()
 
 		ctx := context.Background()
 		client, err := genai.NewClient(ctx, nil)
 		if err != nil {
-			return fmt.Sprintf("Error creating Gemini client: %v", err)
+			return "", fmt.Errorf("error creating Gemini client: %w", err)
 		}
-
-		fmt.Fprint(w, "Gemini client created\n")
 
 		response, err := client.Models.GenerateContent(
 			ctx,
@@ -36,23 +34,42 @@ func generateText(useGemini bool, prompt string, w http.ResponseWriter) string {
 			nil,
 		)
 		if err != nil {
-			return "Error generating text: " + err.Error()
+			return "", fmt.Errorf("error generating text: %w", err)
 		}
-		output := "Prompt: " + prompt + "\n\n"
-		output += string(response.Text())
-		return output
+		output := string(response.Text())
+		return output, nil
 	} else {
 		// テスト用のダミー文章生成
 		result := "テスト（GeminiAPI 未使用）"
-		result += "\nプロンプト: " + prompt
-		return result
+		return result, nil
 	}
 }
 
-func TextGenerationHandler(w http.ResponseWriter, r *http.Request) {
-	prompt := "Explain how AI works in a few words"
-	useGemini := false
+func TextGenerationHandler(c echo.Context) error {
+	var req struct {
+		Prompt    string `json:"prompt"`
+		UseGemini bool   `json:"useGemini"`
+	}
 
-	result := generateText(useGemini, prompt, w)
-	fmt.Fprint(w, result)
+	if err := c.Bind(&req); err != nil {
+		c.Logger().Error("❌ Failed to bind request:", err)
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+
+	prompt := req.Prompt
+	if prompt == "" {
+		prompt = "Explain how AI works in a few words"
+	}
+
+	result, err := generateText(req.UseGemini, prompt)
+	if err != nil {
+		c.Logger().Error("❌ Text generation failed:", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"prompt":    prompt,
+		"useGemini": req.UseGemini,
+		"text":      result,
+	})
 }
