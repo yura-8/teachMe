@@ -39,7 +39,8 @@ func main() {
 		database.Find(&users) // DBから全ユーザー取得
 		return c.JSON(http.StatusOK, users)
 	})
-
+	userHandler := handler.NewUserHandler(database)
+	e.POST("/api/users/login", userHandler.LoginUser)
 	// 文章生成をするエンドポイント
 	e.GET("/generate", func(c echo.Context) error {
 		// handlerを呼び出して文章生成を行う

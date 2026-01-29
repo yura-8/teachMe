@@ -5,10 +5,11 @@ import (
 )
 
 type User struct {
-	ID        uint64      `gorm:"primaryKey;autoIncrement" json:"id"`
+	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	Name      string    `gorm:"size:255;not null" json:"name"`
+	Email     string    `gorm:"size:255;uniqueIndex;not null" json:"email"`
 	AvatarURL string    `gorm:"size:255" json:"avatar_url"`
-	RankID    uint64      `gorm:"not null" json:"rank_id"`
+	RankID    uint64    `gorm:"not null" json:"rank_id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -42,34 +43,34 @@ type Vocabulary struct {
 }
 
 type SignatureList struct {
-	ID        uint64      `gorm:"primaryKey;autoIncrement" json:"id"`
+	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	Content   string    `gorm:"type:text;not null" json:"content"`
-	UserID    uint64      `gorm:"not null" json:"user_id"`
+	UserID    uint64    `gorm:"not null" json:"user_id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type SentMail struct {
-	ID            uint64      `gorm:"primaryKey;autoIncrement" json:"id"`
+	ID            uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	Content       string    `gorm:"type:text;not null" json:"content"`
-	EmailListID   uint64      `gorm:"not null" json:"email_list_id"`
-	MyEmailListID uint64      `gorm:"not null" json:"my_email_list_id"`
-	UserID        uint64      `gorm:"not null" json:"user_id"`
+	EmailListID   uint64    `gorm:"not null" json:"email_list_id"`
+	MyEmailListID uint64    `gorm:"not null" json:"my_email_list_id"`
+	UserID        uint64    `gorm:"not null" json:"user_id"`
 	CreatedAt     time.Time `json:"created_at"`
 }
 
 type Template struct {
-	ID            uint64      `gorm:"primaryKey;autoIncrement" json:"id"`
+	ID            uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	Content       string    `gorm:"type:text;not null" json:"content"`
-	EmailListID   uint64      `gorm:"not null" json:"email_list_id"`
-	MyEmailListID uint64      `gorm:"not null" json:"my_email_list_id"`
-	UserID        uint64      `gorm:"not null" json:"user_id"`
+	EmailListID   uint64    `gorm:"not null" json:"email_list_id"`
+	MyEmailListID uint64    `gorm:"not null" json:"my_email_list_id"`
+	UserID        uint64    `gorm:"not null" json:"user_id"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type Rank struct {
-	ID        uint64      `gorm:"primaryKey;autoIncrement" json:"id"`
+	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	Grade     uint      `gorm:"not null" json:"grade"`
 	ImageURL  string    `gorm:"size:255;not null" json:"image_url"`
 	Content   string    `gorm:"type:text;not null" json:"content"`

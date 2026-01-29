@@ -51,7 +51,7 @@ func generateText(useGemini bool, prompt string, w http.ResponseWriter) string {
 
 func TextGenerationHandler(w http.ResponseWriter, r *http.Request) {
 	prompt := "Explain how AI works in a few words"
-	useGemini := true
+	useGemini := false
 
 	result := generateText(useGemini, prompt, w)
 	fmt.Fprint(w, result)
