@@ -45,7 +45,7 @@ func (h *GenerationHandler) TextGenerationHandler(c echo.Context) error {
 		prompt = "Explain how AI works in a few words"
 	}
 
-	gh, err := h.Service.GenerateAndSave(
+	res, err := h.Service.GenerateAndSave(
 		c.Request().Context(),
 		prompt,
 		req.UseGemini,
@@ -60,12 +60,14 @@ func (h *GenerationHandler) TextGenerationHandler(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{
-		"id":            gh.ID,
-		"userId":        gh.UserID,
-		"emailListId":   gh.EmailListID,
-		"myEmailListId": gh.MyEmailListID,
+		"id":            res.History.ID,
+		"userId":        res.History.UserID,
+		"emailListId":   res.History.EmailListID,
+		"myEmailListId": res.History.MyEmailListID,
 		"prompt":        prompt,
 		"useGemini":     req.UseGemini,
-		"text":          gh.Content,
+		"subject":       res.Draft.Subject,
+		"body":          res.Draft.Body,
+		"text":          res.Draft.Body,
 	})
 }

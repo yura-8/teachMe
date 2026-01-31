@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/joho/godotenv"
 	"google.golang.org/genai"
@@ -22,6 +24,18 @@ func NewGenerationService(repo GenerationHistorySaver) *GenerationService {
 	return &GenerationService{Repo: repo}
 }
 
+type MailDraft struct {
+	Level   int    `json:"level"`
+	Subject string `json:"subject"`
+	Body    string `json:"body"`
+}
+
+type GenerateAndSaveResult struct {
+	History *model.GenerationHistory
+	Draft   MailDraft
+	Raw     string
+}
+
 func (s *GenerationService) GenerateAndSave(
 	ctx context.Context,
 	prompt string,
@@ -30,24 +44,31 @@ func (s *GenerationService) GenerateAndSave(
 	userID *uint64,
 	emailListID *uint64,
 	myEmailListID *uint64,
-) (*model.GenerationHistory, error) {
-	content, err := generateText(ctx, useGemini, prompt, sliderValue)
+) (*GenerateAndSaveResult, error) {
+	raw, err := generateText(ctx, useGemini, prompt, sliderValue)
 	if err != nil {
 		return nil, err
 	}
+
+	draft := parseAndValidateMailDraft(raw, sliderValue, prompt)
 
 	gh := &model.GenerationHistory{
 		UserID:        userID,
 		EmailListID:   emailListID,
 		MyEmailListID: myEmailListID,
-		Content:       content,
+		// Schema stores only Content, so persist the body portion.
+		Content: draft.Body,
 	}
 
 	if err := s.Repo.Create(ctx, gh); err != nil {
 		return nil, fmt.Errorf("failed to save generated text: %w", err)
 	}
 
-	return gh, nil
+	return &GenerateAndSaveResult{
+		History: gh,
+		Draft:   draft,
+		Raw:     raw,
+	}, nil
 }
 
 func generatePrompt(prompt string, slider_value int) string {
@@ -155,4 +176,68 @@ func generateText(ctx context.Context, useGemini bool, prompt string, slider_val
 	default:
 		return `{"level":0,"subject":"テスト（GeminiAPI 未使用）","body":"slider_value(反省度)を 1-5 で指定してください。"} `, nil
 	}
+}
+
+func parseAndValidateMailDraft(raw string, sliderValue int, prompt string) MailDraft {
+	raw = strings.TrimSpace(raw)
+	draft := MailDraft{Level: sliderValue}
+
+	// Gemini can wrap JSON in code fences or include extra text.
+	jsonCandidate := extractFirstJSONObject(raw)
+	if jsonCandidate != "" {
+		var parsed MailDraft
+		if err := json.Unmarshal([]byte(jsonCandidate), &parsed); err == nil {
+			if strings.TrimSpace(parsed.Subject) != "" {
+				draft.Subject = strings.TrimSpace(parsed.Subject)
+			}
+			if strings.TrimSpace(parsed.Body) != "" {
+				draft.Body = strings.TrimSpace(parsed.Body)
+			}
+			if parsed.Level != 0 {
+				draft.Level = parsed.Level
+			}
+		}
+	}
+
+	// Ensure both fields are always available.
+	if strings.TrimSpace(draft.Subject) == "" {
+		draft.Subject = "課題提出に関するお詫び"
+	}
+	if strings.TrimSpace(draft.Body) == "" {
+		switch {
+		case raw != "":
+			draft.Body = raw
+		case strings.TrimSpace(prompt) != "":
+			draft.Body = strings.TrimSpace(prompt)
+		default:
+			draft.Body = "申し訳ありません。"
+		}
+	}
+
+	return draft
+}
+
+func extractFirstJSONObject(raw string) string {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return ""
+	}
+
+	// Handle ```json ... ``` or ``` ... ``` blocks.
+	if idx := strings.Index(s, "```"); idx >= 0 {
+		rest := strings.TrimSpace(s[idx+3:])
+		if strings.HasPrefix(strings.ToLower(rest), "json") {
+			rest = strings.TrimSpace(rest[4:])
+		}
+		if end := strings.Index(rest, "```"); end >= 0 {
+			s = strings.TrimSpace(rest[:end])
+		}
+	}
+
+	start := strings.IndexByte(s, '{')
+	end := strings.LastIndexByte(s, '}')
+	if start < 0 || end < 0 || end <= start {
+		return ""
+	}
+	return strings.TrimSpace(s[start : end+1])
 }
