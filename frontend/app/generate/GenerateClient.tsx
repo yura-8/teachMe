@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import styles from "./generate.module.css";
+import Image from "next/image";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { Textarea } from "@/components/ui/textarea";
 
 type GenerateResponse = {
   [key: string]: unknown;
@@ -151,164 +158,159 @@ export default function GenerateClient() {
   }
 
   return (
-    <div className={styles.layout}>
-      <aside className={styles.sidePanel}>
-        <div className={styles.sideTitle}>設定</div>
+    <div className="mx-auto grid h-[min(720px,calc(100vh-36px))] w-full max-w-[1100px] grid-cols-[300px_1fr] gap-4">
+      <Card className="h-full overflow-hidden">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm text-zinc-900/70">設定</CardTitle>
+        </CardHeader>
+        <CardContent className="flex h-[calc(100%-44px)] flex-col gap-3 overflow-hidden">
+          <div className="space-y-1">
+            <Label htmlFor="userId">User（Email）</Label>
+            <Select
+              id="userId"
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+            >
+              <option value="">(指定しない)</option>
+              {users.map((u) => (
+                <option key={u.id} value={String(u.id)}>
+                  {u.email}
+                  {u.name ? ` (${u.name})` : ""}
+                </option>
+              ))}
+            </Select>
+          </div>
 
-        <label className={styles.label} htmlFor="userId">
-          User（Email）
-        </label>
-        <select
-          id="userId"
-          className={styles.select}
-          value={userId}
-          onChange={(e) => setUserId(e.target.value)}
-        >
-          <option value="">(指定しない)</option>
-          {users.map((u) => (
-            <option key={u.id} value={String(u.id)}>
-              {u.email}
-              {u.name ? ` (${u.name})` : ""}
-            </option>
-          ))}
-        </select>
+          <div className="space-y-1">
+            <Label htmlFor="myEmailListId">MyEmailList（Email）</Label>
+            <Select
+              id="myEmailListId"
+              value={myEmailListId}
+              onChange={(e) => setMyEmailListId(e.target.value)}
+              disabled={!userId}
+            >
+              <option value="">(指定しない)</option>
+              {myEmailLists.map((m) => (
+                <option key={m.id} value={String(m.id)}>
+                  {m.email}
+                </option>
+              ))}
+            </Select>
+          </div>
 
-        <label className={styles.label} htmlFor="myEmailListId">
-          MyEmailList（Email）
-        </label>
-        <select
-          id="myEmailListId"
-          className={styles.select}
-          value={myEmailListId}
-          onChange={(e) => setMyEmailListId(e.target.value)}
-          disabled={!userId}
-        >
-          <option value="">(指定しない)</option>
-          {myEmailLists.map((m) => (
-            <option key={m.id} value={String(m.id)}>
-              {m.email}
-            </option>
-          ))}
-        </select>
+          <div className="space-y-1">
+            <Label htmlFor="emailListId">EmailList（Email）</Label>
+            <Select
+              id="emailListId"
+              value={emailListId}
+              onChange={(e) => setEmailListId(e.target.value)}
+              disabled={!userId}
+            >
+              <option value="">(指定しない)</option>
+              {emailLists.map((m) => (
+                <option key={m.id} value={String(m.id)}>
+                  {m.email}
+                  {m.name ? ` (${m.name})` : ""}
+                </option>
+              ))}
+            </Select>
+          </div>
 
-        <label className={styles.label} htmlFor="emailListId">
-          EmailList（Email）
-        </label>
-        <select
-          id="emailListId"
-          className={styles.select}
-          value={emailListId}
-          onChange={(e) => setEmailListId(e.target.value)}
-          disabled={!userId}
-        >
-          <option value="">(指定しない)</option>
-          {emailLists.map((m) => (
-            <option key={m.id} value={String(m.id)}>
-              {m.email}
-              {m.name ? ` (${m.name})` : ""}
-            </option>
-          ))}
-        </select>
+          <details className="mt-2 overflow-hidden">
+            <summary className="cursor-pointer select-none text-xs font-medium text-zinc-900/60">
+              JSON確認
+            </summary>
+            <div className="mt-2 space-y-2">
+              {sentJson ? (
+                <pre className="max-h-40 overflow-auto rounded-xl border border-zinc-900/10 bg-white px-3 py-2 text-xs text-zinc-900/70">
+                  {sentJson}
+                </pre>
+              ) : null}
+              {resultJson && !error ? (
+                <pre className="max-h-40 overflow-auto rounded-xl border border-zinc-900/10 bg-white px-3 py-2 text-xs text-zinc-900/70">
+                  {resultJson}
+                </pre>
+              ) : null}
+            </div>
+          </details>
+        </CardContent>
+      </Card>
 
-        <details className={styles.details}>
-          <summary className={styles.detailsSummary}>JSON確認</summary>
-          {sentJson ? (
-            <div className={styles.resultBox}>
-              <div className={styles.resultMeta}>
-                <span className={styles.badge}>送信JSON</span>
-              </div>
-              <pre className={styles.resultText}>{sentJson}</pre>
+      <Card className="h-full overflow-hidden">
+        <CardContent className="grid h-full grid-rows-[1fr_auto_auto] gap-4 p-5">
+          <div className="grid place-items-center gap-2">
+            <div className="size-[clamp(140px,18vh,210px)] overflow-hidden rounded-full border border-zinc-900/15 bg-white shadow-sm">
+              <Image
+                src={avatarSrc}
+                alt="avatar"
+                width={420}
+                height={420}
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <div className="text-xs text-zinc-900/60">
+              {selectedUser ? selectedUser.email : "（ユーザー未指定）"}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-900/10 bg-zinc-900/[0.03] p-3">
+            <div className="mb-2 flex items-baseline justify-between">
+              <span className="text-xs font-semibold text-zinc-900/70">
+                反省度
+              </span>
+              <span className="font-mono text-sm text-zinc-900/60">
+                {level}
+              </span>
+            </div>
+            <Slider
+              min={1}
+              max={5}
+              step={1}
+              value={level}
+              onValueChange={(v) => setLevel(v)}
+            />
+          </div>
+
+          <form onSubmit={onSubmit} className="grid gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="prompt">本音（言い訳）</Label>
+              <Textarea
+                id="prompt"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="例: ゲームをしていたら、課題を出し忘れました。"
+                rows={5}
+                className="max-h-[220px] min-h-[140px] resize-none"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-zinc-900/70">
+              <input
+                type="checkbox"
+                checked={useGemini}
+                onChange={(e) => setUseGemini(e.target.checked)}
+              />
+              <span>Gemini を使う（useGemini=true）</span>
+            </label>
+
+            <Button type="submit" disabled={loading} size="lg">
+              {loading ? "生成中..." : "生成する"}
+            </Button>
+          </form>
+
+          {error ? (
+            <div className="rounded-2xl border border-red-600/20 bg-red-600/[0.06] px-4 py-3 text-sm text-red-900/80">
+              {error}
             </div>
           ) : null}
+
           {resultJson && !error ? (
-            <div className={styles.resultBox}>
-              <div className={styles.resultMeta}>
-                <span className={styles.badge}>レスポンスJSON</span>
-              </div>
-              <pre className={styles.resultText}>{resultJson}</pre>
-            </div>
+            <pre className="max-h-40 overflow-auto rounded-2xl border border-zinc-900/10 bg-white px-4 py-3 text-xs text-zinc-900/70">
+              {resultJson}
+            </pre>
           ) : null}
-        </details>
-      </aside>
-
-      <main className={styles.mainColumn}>
-        <div className={styles.avatarArea}>
-          <div className={styles.avatarRing}>
-            <img
-              className={styles.avatarImg}
-              src={avatarSrc}
-              alt="avatar"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-          <div className={styles.avatarCaption}>
-            {selectedUser ? selectedUser.email : "（ユーザー未指定）"}
-          </div>
-        </div>
-
-        <div className={styles.sliderArea}>
-          <div className={styles.sliderHeader}>
-            <span className={styles.sliderLabel}>反省度</span>
-            <span className={styles.sliderValue}>{level}</span>
-          </div>
-          <input
-            className={styles.slider}
-            id="level"
-            type="range"
-            min={1}
-            max={5}
-            step={1}
-            value={level}
-            onChange={(e) => setLevel(Number(e.target.value))}
-          />
-        </div>
-
-        <form onSubmit={onSubmit} className={styles.form}>
-          <label className={styles.label} htmlFor="prompt">
-            本音（言い訳）
-          </label>
-          <textarea
-            id="prompt"
-            className={styles.promptBox}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="例: ゲームをしていたら、課題を出し忘れました。"
-          />
-
-          <label className={styles.toggleRow}>
-            <input
-              type="checkbox"
-              checked={useGemini}
-              onChange={(e) => setUseGemini(e.target.checked)}
-            />
-            <span>Gemini を使う（useGemini=true）</span>
-          </label>
-
-          <button
-            type="submit"
-            className={styles.generateButton}
-            disabled={loading}
-          >
-            {loading ? "生成中..." : "生成する"}
-          </button>
-        </form>
-
-        {error ? (
-          <div className={styles.errorBox}>
-            <div className={styles.errorTitle}>エラー</div>
-            <div className={styles.errorMessage}>{error}</div>
-          </div>
-        ) : null}
-
-        {resultJson && !error ? (
-          <div className={styles.resultBox}>
-            <div className={styles.resultMeta}>
-              <span className={styles.badge}>レスポンスJSON</span>
-            </div>
-            <pre className={styles.resultText}>{resultJson}</pre>
-          </div>
-        ) : null}
-      </main>
+        </CardContent>
+      </Card>
     </div>
   );
 }

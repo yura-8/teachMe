@@ -1,6 +1,5 @@
-import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+// Minimal `cn` helper inspired by shadcn/ui.
+// We intentionally avoid external deps (clsx/tailwind-merge) in this repo.
+export function cn(...inputs: Array<string | false | null | undefined>) {
+  return inputs.filter(Boolean).join(" ");
 }

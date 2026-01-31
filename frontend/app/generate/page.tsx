@@ -1,9 +1,8 @@
 import GenerateClient from "./GenerateClient";
-import styles from "./generate.module.css";
 
 export default async function GeneratePage() {
   return (
-    <div className={styles.generateWrapper}>
+    <div className="min-h-screen overflow-hidden bg-[linear-gradient(to_top,#fddb92_0%,#d1fdff_100%)] p-[18px_16px]">
       <GenerateClient />
     </div>
   );
