@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Send, ChevronDown, Trash2, X } from "lucide-react";
+import { Send, ChevronDown, ChevronUp, Trash2, X } from "lucide-react";
+
 
 type Recipient = {
   id: number;
@@ -23,40 +24,50 @@ type Signature = {
   content: string;
 };
 
+type SentMail = {
+  id: number;
+  content: string;
+  to_email: string;
+  from_email: string;
+  created_at: string;
+};
+
 const API_BASE = "http://localhost:8080";
 
 const isProbablyEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 
 export default function MailConfirmPage() {
-  // master data
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [myEmails, setMyEmails] = useState<MyEmail[]>([]);
   const [signatures, setSignatures] = useState<Signature[]>([]);
 
-  // inputs (A案：入力中心)
   const [toEmailInput, setToEmailInput] = useState("");
   const [fromEmailInput, setFromEmailInput] = useState("");
   const [signatureInput, setSignatureInput] = useState("");
 
-  // mail content
   const [subject, setSubject] = useState("");
   const [mailContent, setMailContent] = useState("ここに生成された文章が入ります。適宜手直ししてください。");
 
-  // dropdown open
   const [openTo, setOpenTo] = useState(false);
   const [openFrom, setOpenFrom] = useState(false);
   const [openSig, setOpenSig] = useState(false);
 
-  // busy
   const [busy, setBusy] = useState(false);
 
-  // ★新規宛先保存時だけ出す追加情報
   const [showRecipientMeta, setShowRecipientMeta] = useState(false);
-  const [pendingToEmail, setPendingToEmail] = useState(""); // 「保存しようとしてるメール」
+  const [pendingToEmail, setPendingToEmail] = useState("");
   const [pendingToName, setPendingToName] = useState("");
   const [pendingToAvatar, setPendingToAvatar] = useState("");
 
-  // 選択中の宛先（toEmailInputと一致する保存済みデータ）
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState<SentMail[]>([]);
+  const [historyScope, setHistoryScope] = useState<"selected" | "all">("selected");
+  const [historySort, setHistorySort] = useState<"desc" | "asc">("desc");
+  const [historyLimit, setHistoryLimit] = useState<20 | 50 | 100>(50);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
   const selectedRecipient = useMemo(() => {
     const email = toEmailInput.trim().toLowerCase();
     return recipients.find((r) => r.email.trim().toLowerCase() === email);
@@ -84,7 +95,6 @@ export default function MailConfirmPage() {
     setMyEmails(myEmailsData);
     setSignatures(sigsData);
 
-    // 初期値（空なら最初の候補を入れる）
     if (!toEmailInput && emailsData.length > 0) setToEmailInput(emailsData[0].email);
     if (!fromEmailInput && myEmailsData.length > 0) setFromEmailInput(myEmailsData[0].email);
     if (!signatureInput && sigsData.length > 0) setSignatureInput(sigsData[0].content);
@@ -92,10 +102,51 @@ export default function MailConfirmPage() {
 
   useEffect(() => {
     refetchAll().catch(console.error);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------- 保存：宛先（1段階目：新規なら追加情報パネルを出す） ----------
+  const fetchHistory = async () => {
+    try {
+      setHistoryLoading(true);
+      setHistoryError(null);
+
+      const params = new URLSearchParams();
+      params.set("sort", historySort);
+      params.set("limit", String(historyLimit));
+
+      const q = historyQuery.trim();
+      if (q) params.set("q", q);
+
+      // 宛先で絞り込み（selected）
+      if (historyScope === "selected") {
+        // “保存済み宛先” が選ばれてる時だけIDで絞る（未保存なら絞れない）
+        const toEmail = toEmailInput.trim().toLowerCase();
+        const recipient = recipients.find((r) => r.email.trim().toLowerCase() === toEmail);
+        if (recipient) {
+          params.set("email_list_id", String(recipient.id));
+        } else {
+          // 未保存なら空にする（または全件扱いでもOK）
+          setHistory([]);
+          setHistoryError("宛先が未保存のため履歴を絞り込めません（先に宛先を保存してください）");
+          return;
+        }
+      }
+
+      const res = await fetch(`${API_BASE}/sent?${params.toString()}`);
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        throw new Error(j?.error || "送信履歴の取得に失敗しました");
+      }
+
+      const data: SentMail[] = await res.json();
+      setHistory(data);
+    } catch (e: any) {
+      setHistoryError(e?.message || "送信履歴の取得に失敗しました");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+
   const saveRecipient = async () => {
     const email = toEmailInput.trim();
     if (!isProbablyEmail(email)) {
@@ -103,26 +154,22 @@ export default function MailConfirmPage() {
       return;
     }
 
-    // 既存なら保存不要
     const exists = recipients.some((r) => r.email.trim().toLowerCase() === email.toLowerCase());
     if (exists) {
       alert("この宛先は既に登録されています（▼から呼び出せます）");
       return;
     }
 
-    // ★未登録なら、追加情報入力パネルを出す
     setPendingToEmail(email);
-    setPendingToName(""); // ここは空でOK（任意）
+    setPendingToName("");
     setPendingToAvatar("");
     setShowRecipientMeta(true);
 
-    // 他の候補を閉じる（見た目の混線防止）
     setOpenTo(false);
     setOpenFrom(false);
     setOpenSig(false);
   };
 
-  // ---------- 保存：宛先（2段階目：確定して登録） ----------
   const confirmSaveRecipient = async () => {
     const email = pendingToEmail.trim();
     if (!isProbablyEmail(email)) {
@@ -145,7 +192,6 @@ export default function MailConfirmPage() {
       if (res.status === 409) {
         const j = await res.json().catch(() => null);
         alert(j?.error || "既に登録されています");
-        // 既に登録されてたらパネル閉じてよい
         setShowRecipientMeta(false);
         return;
       }
@@ -155,10 +201,8 @@ export default function MailConfirmPage() {
         return;
       }
 
-      // 保存成功 → パネル閉じる
       setShowRecipientMeta(false);
 
-      // 再取得 & 入力を確定値に合わせる
       await refetchAll();
       setToEmailInput(email);
 
@@ -168,7 +212,6 @@ export default function MailConfirmPage() {
     }
   };
 
-  // ---------- 保存：送信元 ----------
   const saveMyEmail = async () => {
     const email = fromEmailInput.trim();
     if (!isProbablyEmail(email)) {
@@ -210,7 +253,6 @@ export default function MailConfirmPage() {
     }
   };
 
-  // ---------- 保存：署名 ----------
   const saveSignature = async () => {
     const content = signatureInput.trim();
     if (!content) {
@@ -252,7 +294,6 @@ export default function MailConfirmPage() {
     }
   };
 
-  // ---------- 削除（候補一覧の中で🗑） ----------
   const deleteRecipientById = async (id: number) => {
     if (!confirm("この宛先を削除しますか？")) return;
 
@@ -271,7 +312,6 @@ export default function MailConfirmPage() {
         return;
       }
 
-      // もし削除したのが現在入力と一致なら、入力を空にする/先頭候補へ
       const deleted = recipients.find((r) => r.id === id);
       await refetchAll();
       if (deleted && toEmailInput.trim().toLowerCase() === deleted.email.trim().toLowerCase()) {
@@ -338,7 +378,6 @@ export default function MailConfirmPage() {
     }
   };
 
-  // ---------- 送信（履歴保存） ----------
   const handleSendAndSave = async () => {
     const toEmail = toEmailInput.trim().toLowerCase();
     const fromEmail = fromEmailInput.trim().toLowerCase();
@@ -348,7 +387,6 @@ export default function MailConfirmPage() {
       return;
     }
 
-    // 送信時は “保存済み” 必須（IDが必要）
     const recipient = recipients.find((r) => r.email.trim().toLowerCase() === toEmail);
     const my = myEmails.find((m) => m.email.trim().toLowerCase() === fromEmail);
 
@@ -364,7 +402,7 @@ export default function MailConfirmPage() {
     const fullMessage = `${mailContent}\n\n${signatureInput || ""}`.trim();
 
     const payload = {
-      content: `件名: ${subject}\n\n${fullMessage}`, // subjectカラム無し想定
+      content: `件名: ${subject}\n\n${fullMessage}`,
       email_list_id: recipient.id,
       my_email_list_id: my.id,
       user_id: 1,
@@ -446,7 +484,7 @@ export default function MailConfirmPage() {
                       type="button"
                       aria-label="宛先候補を開く"
                     >
-                      <ChevronDown size={18} />
+                      {openTo ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                     </button>
                   </div>
 
@@ -571,7 +609,7 @@ export default function MailConfirmPage() {
                       type="button"
                       aria-label="送信元候補を開く"
                     >
-                      <ChevronDown size={18} />
+                      {openFrom ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                     </button>
                   </div>
 
@@ -668,9 +706,9 @@ export default function MailConfirmPage() {
                         className="h-11 w-11 rounded-xl border bg-white hover:bg-slate-50 flex items-center justify-center"
                         onClick={() => setOpenSig((v) => !v)}
                         type="button"
-                        aria-label="署名候補を開く"
+                        aria-label="署名候補を開閉"
                       >
-                        <ChevronDown size={18} />
+                        {openSig ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                       </button>
                     </div>
 
@@ -726,6 +764,119 @@ export default function MailConfirmPage() {
                     ※ 宛先/送信元が未保存の場合は送信できません（先に「保存」を押してください）
                   </div>
                 </div>
+
+                {/* ===== 送信履歴 ===== */}
+                  <div className="mt-10 border-t pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-700">送信履歴</div>
+                        <div className="text-xs text-slate-500">
+                          宛先で絞り込み / ソート / 検索できます
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="text-xs text-blue-600 hover:underline"
+                        onClick={async () => {
+                          const next = !showHistory;
+                          setShowHistory(next);
+                          if (next) await fetchHistory();
+                        }}
+                      >
+                        {showHistory ? "閉じる" : "表示"}
+                      </button>
+                    </div>
+
+                    {showHistory && (
+                      <div className="mt-4 space-y-3">
+                        {/* Controls */}
+                        <div className="flex flex-wrap gap-2 items-center">
+                          <select
+                            className="h-10 rounded-lg border px-3 bg-white text-sm"
+                            value={historyScope}
+                            onChange={(e) => setHistoryScope(e.target.value as any)}
+                          >
+                            <option value="selected">この宛先だけ</option>
+                            <option value="all">全件</option>
+                          </select>
+
+                          <select
+                            className="h-10 rounded-lg border px-3 bg-white text-sm"
+                            value={historySort}
+                            onChange={(e) => setHistorySort(e.target.value as any)}
+                          >
+                            <option value="desc">新しい順</option>
+                            <option value="asc">古い順</option>
+                          </select>
+
+                          <select
+                            className="h-10 rounded-lg border px-3 bg-white text-sm"
+                            value={historyLimit}
+                            onChange={(e) => setHistoryLimit(Number(e.target.value) as any)}
+                          >
+                            <option value={20}>20件</option>
+                            <option value={50}>50件</option>
+                            <option value={100}>100件</option>
+                          </select>
+
+                          <input
+                            className="h-10 flex-1 min-w-[220px] rounded-lg border px-3 bg-white text-sm"
+                            placeholder="本文検索（例：欠席 / 体調 / 課題）"
+                            value={historyQuery}
+                            onChange={(e) => setHistoryQuery(e.target.value)}
+                          />
+
+                          <button
+                            type="button"
+                            className="h-10 px-4 rounded-xl bg-amber-100 text-slate-800 font-semibold hover:bg-amber-200 transition disabled:opacity-60"
+                            onClick={fetchHistory}
+                            disabled={historyLoading}
+                          >
+                            更新
+                          </button>
+                        </div>
+
+                        {historyError && (
+                          <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
+                            {historyError}
+                          </div>
+                        )}
+
+                        {historyLoading ? (
+                          <div className="text-xs text-slate-500">読み込み中...</div>
+                        ) : history.length === 0 ? (
+                          <div className="text-xs text-slate-500">履歴がありません</div>
+                        ) : (
+                          <div className="space-y-2">
+                            {history.map((m) => (
+                              <div key={m.id} className="rounded-lg border bg-slate-50 p-3 text-xs">
+                                <div className="space-y-1">
+                                  <div className="text-xs text-slate-500">
+                                    {new Date(m.created_at).toLocaleString()}
+                                  </div>
+
+                                  <div className="text-xs text-slate-600">
+                                    <div>
+                                      To: <span className="font-mono">{m.to_email}</span>
+                                    </div>
+                                    <div>
+                                      From: <span className="font-mono">{m.from_email}</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="font-mono whitespace-pre-wrap text-slate-800">
+                                    {m.content}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
               </div>
             </div>
           </div>

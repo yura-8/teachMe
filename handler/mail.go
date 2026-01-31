@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"teachMe/model"
 
@@ -12,6 +13,14 @@ import (
 )
 
 const devUserID uint64 = 1
+
+type SentMailWithAddress struct {
+	ID        uint64    `json:"id"`
+	Content   string    `json:"content"`
+	ToEmail   string    `json:"to_email"`
+	FromEmail string    `json:"from_email"`
+	CreatedAt time.Time `json:"created_at"`
+}
 
 func InitMailRoutes(e *echo.Echo, db *gorm.DB) {
 	// master fetch
@@ -31,6 +40,9 @@ func InitMailRoutes(e *echo.Echo, db *gorm.DB) {
 
 	// sent
 	e.POST("/sent", CreateSentMail(db))
+
+	// ★送信履歴（絞り込み・ソート対応）
+	e.GET("/sent", GetSentMails(db))
 }
 
 // ---------- helpers ----------
@@ -43,8 +55,37 @@ func parseIDParam(c echo.Context) (uint64, error) {
 	return id64, nil
 }
 
-// ---------- GETs ----------
+func parseUintQuery(c echo.Context, key string) (uint64, bool) {
+	v := strings.TrimSpace(c.QueryParam(key))
+	if v == "" {
+		return 0, false
+	}
+	u, err := strconv.ParseUint(v, 10, 64)
+	if err != nil || u == 0 {
+		return 0, false
+	}
+	return u, true
+}
 
+func parseLimit(c echo.Context, def int) int {
+	v := strings.TrimSpace(c.QueryParam("limit"))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	if n < 1 {
+		return 1
+	}
+	if n > 200 {
+		return 200
+	}
+	return n
+}
+
+// ---------- GETs ----------
 func GetEmailList(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		var list []model.EmailList
@@ -75,8 +116,46 @@ func GetSignatures(db *gorm.DB) echo.HandlerFunc {
 	}
 }
 
-// ---------- CREATEs ----------
+// ★送信履歴取得（絞り込み・ソート・limit・検索）
+func GetSentMails(db *gorm.DB) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		var result []SentMailWithAddress
 
+		sort := c.QueryParam("sort")
+		if sort != "asc" {
+			sort = "desc"
+		}
+
+		emailListID := c.QueryParam("email_list_id")
+
+		q := db.Table("sent_mails").
+			Select(`
+				sent_mails.id,
+				sent_mails.content,
+				sent_mails.created_at,
+				el.email  as to_email,
+				me.email  as from_email
+			`).
+			Joins("JOIN email_lists el ON el.id = sent_mails.email_list_id").
+			Joins("JOIN my_email_lists me ON me.id = sent_mails.my_email_list_id").
+			Where("sent_mails.user_id = ?", 1).
+			Order("sent_mails.created_at " + sort)
+
+		if emailListID != "" {
+			q = q.Where("sent_mails.email_list_id = ?", emailListID)
+		}
+
+		if err := q.Limit(50).Scan(&result).Error; err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "送信履歴の取得に失敗しました",
+			})
+		}
+
+		return c.JSON(http.StatusOK, result)
+	}
+}
+
+// ---------- CREATEs ----------
 type createEmailReq struct {
 	Name      string `json:"name"`
 	Email     string `json:"email"`
@@ -187,7 +266,6 @@ func CreateSignature(db *gorm.DB) echo.HandlerFunc {
 }
 
 // ---------- DELETEs ----------
-
 func DeleteEmail(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		id, err := parseIDParam(c)
@@ -195,13 +273,11 @@ func DeleteEmail(db *gorm.DB) echo.HandlerFunc {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "id が不正です"})
 		}
 
-		// そのユーザーのデータか確認
 		var target model.EmailList
 		if err := db.Where("id = ? AND user_id = ?", id, devUserID).First(&target).Error; err != nil {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "宛先が見つかりません"})
 		}
 
-		// sent_mails が参照してたら削除不可
 		var cnt int64
 		if err := db.Model(&model.SentMail{}).Where("email_list_id = ? AND user_id = ?", id, devUserID).Count(&cnt).Error; err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "参照チェックに失敗しました"})
@@ -256,8 +332,6 @@ func DeleteSignature(db *gorm.DB) echo.HandlerFunc {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "署名が見つかりません"})
 		}
 
-		// ※ sent_mails は signature_id を持ってないので参照チェック不能
-		// 代わりに「削除は許可」でOK（履歴は本文に署名が埋め込まれている想定）
 		if err := db.Delete(&target).Error; err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "削除に失敗しました"})
 		}
@@ -266,7 +340,6 @@ func DeleteSignature(db *gorm.DB) echo.HandlerFunc {
 }
 
 // ---------- SENT ----------
-
 type createSentReq struct {
 	Content       string `json:"content"`
 	EmailListID   uint64 `json:"email_list_id"`
