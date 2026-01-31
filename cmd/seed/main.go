@@ -73,12 +73,13 @@ func main() {
 
 	// 2) User (unique by email)
 	userEmail := "seed.user@example.com"
+	avatarURL := "/business_man.png"
 	var user model.User
 	if err := database.Where("email = ?", userEmail).First(&user).Error; err != nil {
 		user = model.User{
 			Name:      "Seed User",
 			Email:     userEmail,
-			AvatarURL: "https://example.com/avatar.png",
+			AvatarURL: avatarURL,
 			RankID:    rank.ID,
 		}
 		if err := database.Create(&user).Error; err != nil {
@@ -107,7 +108,7 @@ func main() {
 			UserID:    user.ID,
 			Name:      "Test Recipient",
 			Email:     recipientEmail,
-			AvatarURL: "https://example.com/recipient.png",
+			AvatarURL: avatarURL,
 		}
 		if err := database.Create(&recipient).Error; err != nil {
 			log.Fatalf("create email_list failed: %v", err)

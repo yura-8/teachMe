@@ -27,9 +27,9 @@ func (s *GenerationService) GenerateAndSave(
 	prompt string,
 	useGemini bool,
 	sliderValue int,
-	userID uint64,
-	emailListID uint64,
-	myEmailListID uint64,
+	userID *uint64,
+	emailListID *uint64,
+	myEmailListID *uint64,
 ) (*model.GenerationHistory, error) {
 	content, err := generateText(ctx, useGemini, prompt, sliderValue)
 	if err != nil {

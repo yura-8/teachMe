@@ -7,11 +7,12 @@ import "time"
 type GenerationHistory struct {
 	ID uint64 `gorm:"primaryKey" json:"id"`
 
-	UserID        uint64 `gorm:"not null" json:"userId"`
-	EmailListID   uint64 `gorm:"not null" json:"emailListId"`
-	MyEmailListID uint64 `gorm:"not null" json:"myEmailListId"`
+	// These may be NULL to allow generation without selecting a user/list.
+	UserID        *uint64 `json:"userId"`
+	EmailListID   *uint64 `json:"emailListId"`
+	MyEmailListID *uint64 `json:"myEmailListId"`
 
-	Content   string `gorm:"type:text;not null" json:"content"` // 生成された文章を保存
+	Content string `gorm:"type:text;not null" json:"content"` // 生成された文章を保存
 
 	CreatedAt time.Time `json:"createdAt"`
 }
