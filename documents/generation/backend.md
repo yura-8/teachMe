@@ -64,13 +64,16 @@ docker compose up --build
   "myEmailListId": 1,
   "prompt": "ゲームをしていたら、課題を出し忘れました。",
   "useGemini": false,
-  "text": "..."
+  "subject": "課題提出に関するお詫び",
+  "body": "..."
 }
 ```
 
 注意:
 
-- `text` は「生成結果そのもの」です。生成ロジック次第では、文字列として JSON っぽいテキストが返ることがあります（このAPIは中身をパース/検証しません）。
+- 生成結果は内部的に「JSONっぽいテキスト」になることがあります（特に Gemini 生成時）。
+- 現在は `service/generation_service.go` で **生成結果をパース/検証** し、`subject` と `body` を必ず取り出します（取り出せない場合はフォールバックで補完します）。
+- DBには `body` のみ保存します（スキーマが `content` だけのため）。
 
 ## DB保存（GenerationHistory）
 
@@ -78,12 +81,24 @@ docker compose up --build
 
 - `content` に生成後の文章を保存します
 - `user_id/email_list_id/my_email_list_id` は NULL 可能です
+  - `prompt/useGemini/subject` はDBに保存しません（レスポンスとして返すのみ）。
 
 保存フロー:
 
 1. `handler/generation.go` がリクエストを `Bind`
-2. `service/generation_service.go` が生成して `GenerationHistory{ Content: ... }` を作成
-3. `repository/generation_history_repository.go` が `Create` で保存
+2. `service/generation_service.go` が生成結果から `subject/body` を抽出（パース/検証 + フォールバック）
+3. `GenerationHistory{ Content: body }` を作成して保存
+4. `repository/generation_history_repository.go` が `Create` で保存
+
+## Gemini を使う場合（API Key）
+
+`useGemini=true` の場合、API key が必要です。
+
+- `.env`（リポジトリルート）に以下のどちらかを設定します:
+  - `GEMINI_API_KEY=...`
+  - `GOOGLE_API_KEY=...`（フォールバック）
+
+または Docker の `services.app.environment` に設定してください（本番運用想定ならこちら推奨）。
 
 ## DB接続
 
@@ -124,4 +139,3 @@ docker compose down -v
 rm -rf postgres_data
 docker compose up --build -d
 ```
-

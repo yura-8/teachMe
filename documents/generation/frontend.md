@@ -20,13 +20,15 @@ docker compose up --build
 - Page: `frontend/app/generate/page.tsx`
 - UI: `frontend/app/generate/GenerateClient.tsx`（client component）
 
-レイアウト（画面内に収める前提）:
+レイアウト（中央寄せ）:
 
-- 左: 設定パネル（User / MyEmailList / EmailList を選択）
-- 右: 上から縦並び
+- 白いカードUI（生成画面）は画面中央に表示されます。
+- 設定は「設定」ボタンを押すと左から開くパネル（ドロワー）で行います。
+- カード内は上から縦並び:
   - 人のイラスト（大きめ丸アイコン）
   - 反省度スライダー（1〜5）
   - 本音（言い訳）入力 + 生成ボタン
+  - 生成結果（subject/body）
 
 ### アバター表示ルール
 
@@ -60,7 +62,8 @@ docker compose up --build
 メモ:
 
 - `userId/emailListId/myEmailListId` は `null` でもOK（未指定扱い）
-- 画面上では送信JSON/レスポンスJSONを確認できます（デバッグ用）
+- 画面上では `subject`（件名）と `body`（本文）を表示します。
+- 送信JSON/レスポンスJSONは、設定パネル内の「JSON確認」から確認できます（デバッグ用）。
 
 ### ユーザー一覧（ドロップダウン用）
 
@@ -102,4 +105,3 @@ docker compose up --build
 
 - DBに `users` / `my_email_lists` / `email_lists` が入っていない状態です。
 - seed を実行してデータを作成してください（バックエンド側のドキュメント参照）。
-
