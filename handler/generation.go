@@ -1,54 +1,37 @@
 package handler
 
 import (
-	"context"
-	"fmt"
 	"net/http"
 
-	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
-	"google.golang.org/genai"
+	"gorm.io/gorm"
+
+	"teachMe/repository"
+	"teachMe/service"
 )
 
 // API Usage Example:
 // POST: http://localhost:8080/generate
 // Body: {"prompt":"Hello, world!","useGemini":true}
-// Output: {"prompt":"Hello, world!","useGemini":true,"text":"Generated text..."}
+// Output: {"prompt":"Hello, world!","useGemini":true,"text":"Generated text...","id":1}
 
-func generateText(useGemini bool, prompt string) (string, error) {
-	if useGemini {
-		// Gemini APIを使った文章生成
-		// .env はローカル開発用。環境変数が既にセットされているケースもあるので失敗しても続行する。
-		_ = godotenv.Load()
-
-		ctx := context.Background()
-		client, err := genai.NewClient(ctx, nil)
-		if err != nil {
-			return "", fmt.Errorf("error creating Gemini client: %w", err)
-		}
-
-		response, err := client.Models.GenerateContent(
-			ctx,
-			"gemini-3-flash-preview",
-			genai.Text(prompt),
-			nil,
-		)
-		if err != nil {
-			return "", fmt.Errorf("error generating text: %w", err)
-		}
-		output := string(response.Text())
-		return output, nil
-	} else {
-		// テスト用のダミー文章生成
-		result := "テスト（GeminiAPI 未使用）"
-		return result, nil
-	}
+type GenerationHandler struct {
+	Service *service.GenerationService
 }
 
-func TextGenerationHandler(c echo.Context) error {
+func NewGenerationHandler(db *gorm.DB) *GenerationHandler {
+	repo := repository.NewGenerationHistoryRepository(db)
+	svc := service.NewGenerationService(repo)
+	return &GenerationHandler{Service: svc}
+}
+
+func (h *GenerationHandler) TextGenerationHandler(c echo.Context) error {
 	var req struct {
-		Prompt    string `json:"prompt"`
-		UseGemini bool   `json:"useGemini"`
+		Prompt        string `json:"prompt"`
+		UseGemini     bool   `json:"useGemini"`
+		UserID        uint64 `json:"userId"`
+		EmailListID   uint64 `json:"emailListId"`
+		MyEmailListID uint64 `json:"myEmailListId"`
 	}
 
 	if err := c.Bind(&req); err != nil {
@@ -61,15 +44,26 @@ func TextGenerationHandler(c echo.Context) error {
 		prompt = "Explain how AI works in a few words"
 	}
 
-	result, err := generateText(req.UseGemini, prompt)
+	gh, err := h.Service.GenerateAndSave(
+		c.Request().Context(),
+		prompt,
+		req.UseGemini,
+		req.UserID,
+		req.EmailListID,
+		req.MyEmailListID,
+	)
 	if err != nil {
 		c.Logger().Error("❌ Text generation failed:", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{
-		"prompt":    prompt,
-		"useGemini": req.UseGemini,
-		"text":      result,
+		"id":            gh.ID,
+		"userId":        gh.UserID,
+		"emailListId":   gh.EmailListID,
+		"myEmailListId": gh.MyEmailListID,
+		"prompt":        prompt,
+		"useGemini":     req.UseGemini,
+		"text":          gh.Content,
 	})
 }

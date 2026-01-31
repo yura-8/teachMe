@@ -22,6 +22,7 @@ func main() {
 		&model.SignatureList{},
 		&model.SentMail{},
 		&model.Template{},
+		&model.GenerationHistory{},
 	)
 
 	// Echoのインスタンスを作成
@@ -42,7 +43,8 @@ func main() {
 	userHandler := handler.NewUserHandler(database)
 	e.POST("/api/users/login", userHandler.LoginUser)
 	// 文章生成をするエンドポイント
-	e.POST("/generate", handler.TextGenerationHandler)
+	generationHandler := handler.NewGenerationHandler(database)
+	e.POST("/generate", generationHandler.TextGenerationHandler)
 
 	// サーバー起動
 	e.Logger.Fatal(e.Start(":8080"))
