@@ -38,6 +38,7 @@ export default function GenerateClient() {
   const [prompt, setPrompt] = useState("");
   const [useGemini, setUseGemini] = useState(false);
   const [level, setLevel] = useState(3);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [users, setUsers] = useState<User[]>([]);
   const [userId, setUserId] = useState<string>("");
@@ -50,6 +51,8 @@ export default function GenerateClient() {
 
   const [sentJson, setSentJson] = useState<string | null>(null);
   const [resultJson, setResultJson] = useState<string | null>(null);
+  const [subject, setSubject] = useState<string>("");
+  const [body, setBody] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -124,6 +127,8 @@ export default function GenerateClient() {
     setError(null);
     setSentJson(null);
     setResultJson(null);
+    setSubject("");
+    setBody("");
 
     try {
       const payload = {
@@ -150,6 +155,12 @@ export default function GenerateClient() {
         setError(maybeError ?? `Request failed: ${res.status}`);
         return;
       }
+
+      const maybeSubject =
+        typeof data?.subject === "string" ? (data.subject as string) : "";
+      const maybeBody = typeof data?.body === "string" ? (data.body as string) : "";
+      setSubject(maybeSubject);
+      setBody(maybeBody);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -158,87 +169,21 @@ export default function GenerateClient() {
   }
 
   return (
-    <div className="mx-auto grid h-[min(720px,calc(100vh-36px))] w-full max-w-[1100px] grid-cols-[300px_1fr] gap-4">
-      <Card className="h-full overflow-hidden">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-zinc-900/70">設定</CardTitle>
+    <div className="mx-auto w-full max-w-[960px]">
+      <Card className="w-full overflow-hidden">
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardTitle className="text-base">文章生成</CardTitle>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setSettingsOpen(true)}
+          >
+            設定
+          </Button>
         </CardHeader>
-        <CardContent className="flex h-[calc(100%-44px)] flex-col gap-3 overflow-hidden">
-          <div className="space-y-1">
-            <Label htmlFor="userId">User（Email）</Label>
-            <Select
-              id="userId"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-            >
-              <option value="">(指定しない)</option>
-              {users.map((u) => (
-                <option key={u.id} value={String(u.id)}>
-                  {u.email}
-                  {u.name ? ` (${u.name})` : ""}
-                </option>
-              ))}
-            </Select>
-          </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="myEmailListId">MyEmailList（Email）</Label>
-            <Select
-              id="myEmailListId"
-              value={myEmailListId}
-              onChange={(e) => setMyEmailListId(e.target.value)}
-              disabled={!userId}
-            >
-              <option value="">(指定しない)</option>
-              {myEmailLists.map((m) => (
-                <option key={m.id} value={String(m.id)}>
-                  {m.email}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <Label htmlFor="emailListId">EmailList（Email）</Label>
-            <Select
-              id="emailListId"
-              value={emailListId}
-              onChange={(e) => setEmailListId(e.target.value)}
-              disabled={!userId}
-            >
-              <option value="">(指定しない)</option>
-              {emailLists.map((m) => (
-                <option key={m.id} value={String(m.id)}>
-                  {m.email}
-                  {m.name ? ` (${m.name})` : ""}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <details className="mt-2 overflow-hidden">
-            <summary className="cursor-pointer select-none text-xs font-medium text-zinc-900/60">
-              JSON確認
-            </summary>
-            <div className="mt-2 space-y-2">
-              {sentJson ? (
-                <pre className="max-h-40 overflow-auto rounded-xl border border-zinc-900/10 bg-white px-3 py-2 text-xs text-zinc-900/70">
-                  {sentJson}
-                </pre>
-              ) : null}
-              {resultJson && !error ? (
-                <pre className="max-h-40 overflow-auto rounded-xl border border-zinc-900/10 bg-white px-3 py-2 text-xs text-zinc-900/70">
-                  {resultJson}
-                </pre>
-              ) : null}
-            </div>
-          </details>
-        </CardContent>
-      </Card>
-
-      <Card className="h-full overflow-hidden">
-        <CardContent className="grid h-full grid-rows-[1fr_auto_auto] gap-4 p-5">
-          <div className="grid place-items-center gap-2">
+        <CardContent className="grid gap-4 p-5">
+          <div className="grid place-items-center gap-2 py-2">
             <div className="size-[clamp(140px,18vh,210px)] overflow-hidden rounded-full border border-zinc-900/15 bg-white shadow-sm">
               <Image
                 src={avatarSrc}
@@ -258,9 +203,7 @@ export default function GenerateClient() {
               <span className="text-xs font-semibold text-zinc-900/70">
                 反省度
               </span>
-              <span className="font-mono text-sm text-zinc-900/60">
-                {level}
-              </span>
+              <span className="font-mono text-sm text-zinc-900/60">{level}</span>
             </div>
             <Slider
               min={1}
@@ -280,37 +223,150 @@ export default function GenerateClient() {
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="例: ゲームをしていたら、課題を出し忘れました。"
                 rows={5}
-                className="max-h-[220px] min-h-[140px] resize-none"
+                className="min-h-[160px] resize-none lg:min-h-[220px]"
               />
             </div>
-
-            <label className="flex items-center gap-2 text-sm text-zinc-900/70">
-              <input
-                type="checkbox"
-                checked={useGemini}
-                onChange={(e) => setUseGemini(e.target.checked)}
-              />
-              <span>Gemini を使う（useGemini=true）</span>
-            </label>
 
             <Button type="submit" disabled={loading} size="lg">
               {loading ? "生成中..." : "生成する"}
             </Button>
           </form>
 
+          {subject || body ? (
+            <div className="grid gap-2">
+              <div className="rounded-2xl border border-zinc-900/10 bg-white px-4 py-3">
+                <div className="text-xs font-semibold text-zinc-900/60">
+                  件名（subject）
+                </div>
+                <div className="mt-1 whitespace-pre-wrap break-words text-sm text-zinc-900">
+                  {subject || "(空)"}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-zinc-900/10 bg-white px-4 py-3">
+                <div className="text-xs font-semibold text-zinc-900/60">
+                  本文（body）
+                </div>
+                <pre className="mt-2 max-h-[40vh] overflow-auto whitespace-pre-wrap break-words text-sm text-zinc-900/80">
+                  {body || "(空)"}
+                </pre>
+              </div>
+            </div>
+          ) : null}
+
           {error ? (
             <div className="rounded-2xl border border-red-600/20 bg-red-600/[0.06] px-4 py-3 text-sm text-red-900/80">
               {error}
             </div>
           ) : null}
-
-          {resultJson && !error ? (
-            <pre className="max-h-40 overflow-auto rounded-2xl border border-zinc-900/10 bg-white px-4 py-3 text-xs text-zinc-900/70">
-              {resultJson}
-            </pre>
-          ) : null}
         </CardContent>
       </Card>
+
+      {settingsOpen ? (
+        <div className="fixed inset-0 z-50">
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default bg-black/30"
+            onClick={() => setSettingsOpen(false)}
+            aria-label="close settings"
+          />
+
+          <div className="absolute left-0 top-0 h-full w-[min(380px,92vw)] p-4">
+            <Card className="h-full overflow-hidden">
+              <CardHeader className="flex flex-row items-center justify-between gap-3">
+                <CardTitle className="text-sm text-zinc-900/70">設定</CardTitle>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setSettingsOpen(false)}
+                >
+                  閉じる
+                </Button>
+              </CardHeader>
+
+              <CardContent className="flex h-[calc(100%-56px)] flex-col gap-3 overflow-auto pb-6">
+                <div className="space-y-1">
+                  <Label htmlFor="userId">User（Email）</Label>
+                  <Select
+                    id="userId"
+                    value={userId}
+                    onChange={(e) => setUserId(e.target.value)}
+                  >
+                    <option value="">(指定しない)</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={String(u.id)}>
+                        {u.email}
+                        {u.name ? ` (${u.name})` : ""}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="myEmailListId">MyEmailList（Email）</Label>
+                  <Select
+                    id="myEmailListId"
+                    value={myEmailListId}
+                    onChange={(e) => setMyEmailListId(e.target.value)}
+                    disabled={!userId}
+                  >
+                    <option value="">(指定しない)</option>
+                    {myEmailLists.map((m) => (
+                      <option key={m.id} value={String(m.id)}>
+                        {m.email}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="emailListId">EmailList（Email）</Label>
+                  <Select
+                    id="emailListId"
+                    value={emailListId}
+                    onChange={(e) => setEmailListId(e.target.value)}
+                    disabled={!userId}
+                  >
+                    <option value="">(指定しない)</option>
+                    {emailLists.map((m) => (
+                      <option key={m.id} value={String(m.id)}>
+                        {m.email}
+                        {m.name ? ` (${m.name})` : ""}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <label className="mt-2 flex items-center gap-2 text-sm text-zinc-900/70">
+                  <input
+                    type="checkbox"
+                    checked={useGemini}
+                    onChange={(e) => setUseGemini(e.target.checked)}
+                  />
+                  <span>Gemini を使う（useGemini=true）</span>
+                </label>
+
+                <details className="mt-2 overflow-hidden">
+                  <summary className="cursor-pointer select-none text-xs font-medium text-zinc-900/60">
+                    JSON確認
+                  </summary>
+                  <div className="mt-2 space-y-2">
+                    {sentJson ? (
+                      <pre className="max-h-80 overflow-auto rounded-xl border border-zinc-900/10 bg-white px-3 py-2 text-xs text-zinc-900/70">
+                        {sentJson}
+                      </pre>
+                    ) : null}
+                    {resultJson && !error ? (
+                      <pre className="max-h-80 overflow-auto rounded-xl border border-zinc-900/10 bg-white px-3 py-2 text-xs text-zinc-900/70">
+                        {resultJson}
+                      </pre>
+                    ) : null}
+                  </div>
+                </details>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

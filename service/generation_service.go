@@ -138,9 +138,9 @@ func generatePrompt(prompt string, slider_value int) string {
 
 func generateText(ctx context.Context, useGemini bool, prompt string, slider_value int) (string, error) {
 	if useGemini {
-		// .env is for local dev; ignore errors so containers/env-vars continue to work.
 		_ = godotenv.Load()
 
+		ctx := context.Background()
 		client, err := genai.NewClient(ctx, nil)
 		if err != nil {
 			return "", fmt.Errorf("error creating Gemini client: %w", err)

@@ -73,7 +73,12 @@ export async function POST(req: Request) {
 
   const text = await res.text();
   try {
-    const json = JSON.parse(text);
+    const json = JSON.parse(text) as unknown;
+    // If backend still returns legacy `text`, strip it since the UI consumes subject/body.
+    if (json && typeof json === "object" && "text" in json) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (json as any).text;
+    }
     return NextResponse.json(json, { status: res.status });
   } catch {
     // Backend should return JSON, but if it doesn't, surface it for debugging.
