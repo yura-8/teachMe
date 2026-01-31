@@ -27,16 +27,19 @@ func InitMailRoutes(e *echo.Echo, db *gorm.DB) {
 	e.GET("/emails", GetEmailList(db))
 	e.GET("/my-emails", GetMyEmails(db))
 	e.GET("/signatures", GetSignatures(db))
+	e.GET("/templates", GetTemplates(db))
 
 	// master create
 	e.POST("/emails", CreateEmail(db))
 	e.POST("/my-emails", CreateMyEmail(db))
 	e.POST("/signatures", CreateSignature(db))
+	e.POST("/templates", CreateTemplate(db))
 
 	// master delete
 	e.DELETE("/emails/:id", DeleteEmail(db))
 	e.DELETE("/my-emails/:id", DeleteMyEmail(db))
 	e.DELETE("/signatures/:id", DeleteSignature(db))
+	e.DELETE("/templates/:id", DeleteTemplate(db))
 
 	// sent
 	e.POST("/sent", CreateSentMail(db))
@@ -381,5 +384,98 @@ func CreateSentMail(db *gorm.DB) echo.HandlerFunc {
 		}
 
 		return c.JSON(http.StatusCreated, record)
+	}
+
+}
+
+// GetTemplates テンプレ一覧（宛先/送信元で絞り込み）
+func GetTemplates(db *gorm.DB) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		var list []model.Template
+
+		q := db.Where("user_id = ?", devUserID)
+
+		if v := c.QueryParam("email_list_id"); v != "" {
+			q = q.Where("email_list_id = ?", v)
+		}
+		if v := c.QueryParam("my_email_list_id"); v != "" {
+			q = q.Where("my_email_list_id = ?", v)
+		}
+
+		if err := q.Order("updated_at desc").Find(&list).Error; err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "テンプレの取得に失敗しました"})
+		}
+		return c.JSON(http.StatusOK, list)
+	}
+}
+
+type createTemplateReq struct {
+	Content       string `json:"content"`
+	EmailListID   uint64 `json:"email_list_id"`
+	MyEmailListID uint64 `json:"my_email_list_id"`
+}
+
+// CreateTemplate テンプレを保存（宛先/送信元必須）
+func CreateTemplate(db *gorm.DB) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		req := new(createTemplateReq)
+		if err := c.Bind(req); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "データの形式が正しくありません"})
+		}
+
+		content := strings.TrimSpace(req.Content)
+		if content == "" {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "content は必須です"})
+		}
+		if req.EmailListID == 0 || req.MyEmailListID == 0 {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "宛先/送信元が未指定です"})
+		}
+
+		// 重複チェック（同じ宛先・送信元・本文は弾く）
+		var existing model.Template
+		err := db.Where(
+			"user_id = ? AND email_list_id = ? AND my_email_list_id = ? AND content = ?",
+			devUserID, req.EmailListID, req.MyEmailListID, content,
+		).First(&existing).Error
+
+		if err == nil {
+			return c.JSON(http.StatusConflict, map[string]string{"error": "既に同じテンプレが登録されています"})
+		}
+		if err != gorm.ErrRecordNotFound {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "重複チェックに失敗しました"})
+		}
+
+		record := model.Template{
+			UserID:        devUserID,
+			EmailListID:   req.EmailListID,
+			MyEmailListID: req.MyEmailListID,
+			Content:       content,
+		}
+
+		if err := db.Create(&record).Error; err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "テンプレの保存に失敗しました"})
+		}
+
+		return c.JSON(http.StatusCreated, record)
+	}
+}
+
+// DeleteTemplate テンプレ削除
+func DeleteTemplate(db *gorm.DB) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		id, err := parseIDParam(c)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "id が不正です"})
+		}
+
+		var target model.Template
+		if err := db.Where("id = ? AND user_id = ?", id, devUserID).First(&target).Error; err != nil {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "テンプレが見つかりません"})
+		}
+
+		if err := db.Delete(&target).Error; err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "削除に失敗しました"})
+		}
+		return c.NoContent(http.StatusNoContent)
 	}
 }
