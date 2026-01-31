@@ -4,9 +4,9 @@ type GenerateRequest = {
   prompt?: string;
   useGemini?: boolean;
   level?: number;
-  userId?: number;
-  emailListId?: number;
-  myEmailListId?: number;
+  userId?: number | null;
+  emailListId?: number | null;
+  myEmailListId?: number | null;
 };
 
 export async function POST(req: Request) {
@@ -20,10 +20,10 @@ export async function POST(req: Request) {
   const prompt = typeof body.prompt === "string" ? body.prompt : "";
   const useGemini = Boolean(body.useGemini);
   const level = typeof body.level === "number" ? body.level : 3;
-  const userId = typeof body.userId === "number" ? body.userId : 0;
-  const emailListId = typeof body.emailListId === "number" ? body.emailListId : 0;
+  const userId = typeof body.userId === "number" ? body.userId : null;
+  const emailListId = typeof body.emailListId === "number" ? body.emailListId : null;
   const myEmailListId =
-    typeof body.myEmailListId === "number" ? body.myEmailListId : 0;
+    typeof body.myEmailListId === "number" ? body.myEmailListId : null;
 
   // Prefer env, but also support both common setups:
   // - Frontend running in Docker (backend reachable as http://app:8080)

@@ -11,6 +11,7 @@ type User = {
   id: number;
   email: string;
   name?: string;
+  avatar_url?: string;
 };
 
 type MyEmailList = {
@@ -45,6 +46,12 @@ export default function GenerateClient() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const selectedUser = users.find((u) => String(u.id) === userId) ?? null;
+  const avatarSrc =
+    selectedUser?.avatar_url && selectedUser.avatar_url.trim() !== ""
+      ? selectedUser.avatar_url
+      : "/business_man_angry.png";
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -54,9 +61,8 @@ export default function GenerateClient() {
         if (!res.ok) return;
         if (cancelled) return;
         setUsers(data);
-        if (data.length > 0) {
-          setUserId(String(data[0].id));
-        }
+        // Default: no user selected (allows null IDs end-to-end).
+        setUserId("");
       } catch {
         // ignore; user can still type prompt and see errors on submit
       }
@@ -67,7 +73,13 @@ export default function GenerateClient() {
   }, []);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setMyEmailLists([]);
+      setMyEmailListId("");
+      setEmailLists([]);
+      setEmailListId("");
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -84,11 +96,11 @@ export default function GenerateClient() {
         if (cancelled) return;
         if (myRes.ok) {
           setMyEmailLists(myData);
-          setMyEmailListId(myData.length > 0 ? String(myData[0].id) : "");
+          setMyEmailListId("");
         }
         if (emailRes.ok) {
           setEmailLists(emailData);
-          setEmailListId(emailData.length > 0 ? String(emailData[0].id) : "");
+          setEmailListId("");
         }
       } catch {
         // ignore
@@ -107,18 +119,13 @@ export default function GenerateClient() {
     setResultJson(null);
 
     try {
-      if (!userId || !myEmailListId || !emailListId) {
-        setError("userId / myEmailListId / emailListId を選択してください");
-        return;
-      }
-
       const payload = {
         prompt,
         useGemini,
         level,
-        userId: Number(userId),
-        emailListId: Number(emailListId),
-        myEmailListId: Number(myEmailListId),
+        userId: userId ? Number(userId) : null,
+        emailListId: emailListId ? Number(emailListId) : null,
+        myEmailListId: myEmailListId ? Number(myEmailListId) : null,
       };
       setSentJson(JSON.stringify(payload, null, 2));
 
@@ -144,23 +151,20 @@ export default function GenerateClient() {
   }
 
   return (
-    <div className={styles.panel}>
-      <h1 className={styles.title}>文章生成</h1>
-      <p className={styles.subtitle}>
-        プロンプトを入力して、バックエンド(`/api/generate`)で文章を生成します。
-      </p>
+    <div className={styles.layout}>
+      <aside className={styles.sidePanel}>
+        <div className={styles.sideTitle}>設定</div>
 
-      <form onSubmit={onSubmit} className={styles.form}>
         <label className={styles.label} htmlFor="userId">
           User（Email）
         </label>
         <select
           id="userId"
-          className={styles.textarea}
+          className={styles.select}
           value={userId}
           onChange={(e) => setUserId(e.target.value)}
         >
-          {users.length === 0 ? <option value="">(ユーザーなし)</option> : null}
+          <option value="">(指定しない)</option>
           {users.map((u) => (
             <option key={u.id} value={String(u.id)}>
               {u.email}
@@ -174,13 +178,12 @@ export default function GenerateClient() {
         </label>
         <select
           id="myEmailListId"
-          className={styles.textarea}
+          className={styles.select}
           value={myEmailListId}
           onChange={(e) => setMyEmailListId(e.target.value)}
+          disabled={!userId}
         >
-          {myEmailLists.length === 0 ? (
-            <option value="">(選択肢なし)</option>
-          ) : null}
+          <option value="">(指定しない)</option>
           {myEmailLists.map((m) => (
             <option key={m.id} value={String(m.id)}>
               {m.email}
@@ -193,11 +196,12 @@ export default function GenerateClient() {
         </label>
         <select
           id="emailListId"
-          className={styles.textarea}
+          className={styles.select}
           value={emailListId}
           onChange={(e) => setEmailListId(e.target.value)}
+          disabled={!userId}
         >
-          {emailLists.length === 0 ? <option value="">(選択肢なし)</option> : null}
+          <option value="">(指定しない)</option>
           {emailLists.map((m) => (
             <option key={m.id} value={String(m.id)}>
               {m.email}
@@ -206,73 +210,105 @@ export default function GenerateClient() {
           ))}
         </select>
 
-        <label className={styles.label} htmlFor="prompt">
-          プロンプト
-        </label>
-        <textarea
-          id="prompt"
-          className={styles.textarea}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder="例: 3行で自己紹介文を作って"
-          rows={5}
-        />
+        <details className={styles.details}>
+          <summary className={styles.detailsSummary}>JSON確認</summary>
+          {sentJson ? (
+            <div className={styles.resultBox}>
+              <div className={styles.resultMeta}>
+                <span className={styles.badge}>送信JSON</span>
+              </div>
+              <pre className={styles.resultText}>{sentJson}</pre>
+            </div>
+          ) : null}
+          {resultJson && !error ? (
+            <div className={styles.resultBox}>
+              <div className={styles.resultMeta}>
+                <span className={styles.badge}>レスポンスJSON</span>
+              </div>
+              <pre className={styles.resultText}>{resultJson}</pre>
+            </div>
+          ) : null}
+        </details>
+      </aside>
 
-        <label className={styles.toggleRow}>
+      <main className={styles.mainColumn}>
+        <div className={styles.avatarArea}>
+          <div className={styles.avatarRing}>
+            <img
+              className={styles.avatarImg}
+              src={avatarSrc}
+              alt="avatar"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+          <div className={styles.avatarCaption}>
+            {selectedUser ? selectedUser.email : "（ユーザー未指定）"}
+          </div>
+        </div>
+
+        <div className={styles.sliderArea}>
+          <div className={styles.sliderHeader}>
+            <span className={styles.sliderLabel}>反省度</span>
+            <span className={styles.sliderValue}>{level}</span>
+          </div>
           <input
-            type="checkbox"
-            checked={useGemini}
-            onChange={(e) => setUseGemini(e.target.checked)}
+            className={styles.slider}
+            id="level"
+            type="range"
+            min={1}
+            max={5}
+            step={1}
+            value={level}
+            onChange={(e) => setLevel(Number(e.target.value))}
           />
-          <span>Gemini を使う（useGemini=true）</span>
-        </label>
+        </div>
 
-        <label className={styles.label} htmlFor="level">
-          反省度: {level}
-        </label>
-        <input
-          id="level"
-          type="range"
-          min={1}
-          max={5}
-          step={1}
-          value={level}
-          onChange={(e) => setLevel(Number(e.target.value))}
-        />
+        <form onSubmit={onSubmit} className={styles.form}>
+          <label className={styles.label} htmlFor="prompt">
+            本音（言い訳）
+          </label>
+          <textarea
+            id="prompt"
+            className={styles.promptBox}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="例: ゲームをしていたら、課題を出し忘れました。"
+          />
 
-        <button
-          type="submit"
-          className={styles.generateButton}
-          disabled={loading}
-        >
-          {loading ? "生成中..." : "生成する"}
-        </button>
-      </form>
+          <label className={styles.toggleRow}>
+            <input
+              type="checkbox"
+              checked={useGemini}
+              onChange={(e) => setUseGemini(e.target.checked)}
+            />
+            <span>Gemini を使う（useGemini=true）</span>
+          </label>
 
-      {sentJson ? (
-        <div className={styles.resultBox}>
-          <div className={styles.resultMeta}>
-            <span className={styles.badge}>送信JSON</span>
+          <button
+            type="submit"
+            className={styles.generateButton}
+            disabled={loading}
+          >
+            {loading ? "生成中..." : "生成する"}
+          </button>
+        </form>
+
+        {error ? (
+          <div className={styles.errorBox}>
+            <div className={styles.errorTitle}>エラー</div>
+            <div className={styles.errorMessage}>{error}</div>
           </div>
-          <pre className={styles.resultText}>{sentJson}</pre>
-        </div>
-      ) : null}
+        ) : null}
 
-      {error ? (
-        <div className={styles.errorBox}>
-          <div className={styles.errorTitle}>エラー</div>
-          <div className={styles.errorMessage}>{error}</div>
-        </div>
-      ) : null}
-
-      {resultJson && !error ? (
-        <div className={styles.resultBox}>
-          <div className={styles.resultMeta}>
-            <span className={styles.badge}>レスポンスJSON</span>
+        {resultJson && !error ? (
+          <div className={styles.resultBox}>
+            <div className={styles.resultMeta}>
+              <span className={styles.badge}>レスポンスJSON</span>
+            </div>
+            <pre className={styles.resultText}>{resultJson}</pre>
           </div>
-          <pre className={styles.resultText}>{resultJson}</pre>
-        </div>
-      ) : null}
+        ) : null}
+      </main>
     </div>
   );
 }
