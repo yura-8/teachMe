@@ -29,6 +29,7 @@ func (h *GenerationHandler) TextGenerationHandler(c echo.Context) error {
 	var req struct {
 		Prompt        string `json:"prompt"`
 		UseGemini     bool   `json:"useGemini"`
+		Level         int    `json:"level"` // 1-5: 反省度
 		UserID        uint64 `json:"userId"`
 		EmailListID   uint64 `json:"emailListId"`
 		MyEmailListID uint64 `json:"myEmailListId"`
@@ -48,6 +49,7 @@ func (h *GenerationHandler) TextGenerationHandler(c echo.Context) error {
 		c.Request().Context(),
 		prompt,
 		req.UseGemini,
+		req.Level,
 		req.UserID,
 		req.EmailListID,
 		req.MyEmailListID,

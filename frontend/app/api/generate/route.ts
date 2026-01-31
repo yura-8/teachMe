@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 type GenerateRequest = {
   prompt?: string;
   useGemini?: boolean;
+  level?: number;
+  userId?: number;
+  emailListId?: number;
+  myEmailListId?: number;
 };
 
 export async function POST(req: Request) {
@@ -15,6 +19,11 @@ export async function POST(req: Request) {
 
   const prompt = typeof body.prompt === "string" ? body.prompt : "";
   const useGemini = Boolean(body.useGemini);
+  const level = typeof body.level === "number" ? body.level : 3;
+  const userId = typeof body.userId === "number" ? body.userId : 0;
+  const emailListId = typeof body.emailListId === "number" ? body.emailListId : 0;
+  const myEmailListId =
+    typeof body.myEmailListId === "number" ? body.myEmailListId : 0;
 
   // Prefer env, but also support both common setups:
   // - Frontend running in Docker (backend reachable as http://app:8080)
@@ -32,10 +41,17 @@ export async function POST(req: Request) {
   for (const origin of candidates) {
     try {
       usedOrigin = origin;
-      res = await fetch(`${origin}/generate`, {
+      res = await fetch(`${origin}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, useGemini }),
+        body: JSON.stringify({
+          prompt,
+          useGemini,
+          level,
+          userId,
+          emailListId,
+          myEmailListId,
+        }),
       });
       break;
     } catch (err) {
