@@ -4,10 +4,16 @@ type GenerateRequest = {
   prompt?: string;
   useGemini?: boolean;
   level?: number;
-  userId?: number | null;
-  emailListId?: number | null;
-  myEmailListId?: number | null;
+  userId?: number;
+  emailListId?: number;
+  myEmailListId?: number;
 };
+
+function asPositiveNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : null;
+}
 
 export async function POST(req: Request) {
   let body: GenerateRequest;
@@ -20,10 +26,18 @@ export async function POST(req: Request) {
   const prompt = typeof body.prompt === "string" ? body.prompt : "";
   const useGemini = Boolean(body.useGemini);
   const level = typeof body.level === "number" ? body.level : 3;
-  const userId = typeof body.userId === "number" ? body.userId : null;
-  const emailListId = typeof body.emailListId === "number" ? body.emailListId : null;
-  const myEmailListId =
-    typeof body.myEmailListId === "number" ? body.myEmailListId : null;
+  const userId = asPositiveNumber(body.userId);
+  const emailListId = asPositiveNumber(body.emailListId);
+  const myEmailListId = asPositiveNumber(body.myEmailListId);
+
+  if (!userId || !emailListId || !myEmailListId) {
+    return NextResponse.json(
+      {
+        error: "userId/emailListId/myEmailListId are required",
+      },
+      { status: 400 },
+    );
+  }
 
   // Prefer env, but also support both common setups:
   // - Frontend running in Docker (backend reachable as http://app:8080)

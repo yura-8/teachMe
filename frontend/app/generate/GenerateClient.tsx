@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
+import defaultAvatar from "@/public/default.png";
 
 type GenerateResponse = {
   [key: string]: unknown;
@@ -39,6 +40,7 @@ export default function GenerateClient() {
   const [useGemini, setUseGemini] = useState(false);
   const [level, setLevel] = useState(3);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const [users, setUsers] = useState<User[]>([]);
   const [userId, setUserId] = useState<string>("");
@@ -57,10 +59,15 @@ export default function GenerateClient() {
   const [loading, setLoading] = useState(false);
 
   const selectedUser = users.find((u) => String(u.id) === userId) ?? null;
+  const selectedMyEmailList =
+    myEmailLists.find((m) => String(m.id) === myEmailListId) ?? null;
+  const selectedEmailList =
+    emailLists.find((m) => String(m.id) === emailListId) ?? null;
+
   const avatarSrc =
     selectedUser?.avatar_url && selectedUser.avatar_url.trim() !== ""
       ? selectedUser.avatar_url
-      : "/business_man_angry.png";
+      : defaultAvatar;
 
   useEffect(() => {
     let cancelled = false;
@@ -131,13 +138,18 @@ export default function GenerateClient() {
     setBody("");
 
     try {
+      if (!userId || !myEmailListId || !emailListId) {
+        setError("User / MyEmailList / EmailList を選択してください（アイコンから設定）");
+        return;
+      }
+
       const payload = {
         prompt,
         useGemini,
         level,
-        userId: userId ? Number(userId) : null,
-        emailListId: emailListId ? Number(emailListId) : null,
-        myEmailListId: myEmailListId ? Number(myEmailListId) : null,
+        userId: Number(userId),
+        emailListId: Number(emailListId),
+        myEmailListId: Number(myEmailListId),
       };
       setSentJson(JSON.stringify(payload, null, 2));
 
@@ -159,8 +171,10 @@ export default function GenerateClient() {
       const maybeSubject =
         typeof data?.subject === "string" ? (data.subject as string) : "";
       const maybeBody = typeof data?.body === "string" ? (data.body as string) : "";
-      setSubject(maybeSubject);
-      setBody(maybeBody);
+      if (!useGemini) {
+        setSubject(maybeSubject);
+        setBody(maybeBody);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -170,37 +184,62 @@ export default function GenerateClient() {
 
   return (
     <div className="mx-auto w-full max-w-[960px]">
-      <Card className="w-full overflow-hidden">
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle className="text-base">文章生成</CardTitle>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setSettingsOpen(true)}
-          >
-            設定
-          </Button>
-        </CardHeader>
+        <Card className="w-full overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
+            <CardTitle className="text-base">文章生成</CardTitle>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSettingsOpen(true)}
+            >
+              設定
+            </Button>
+          </CardHeader>
 
         <CardContent className="grid gap-4 p-5">
-          <div className="grid place-items-center gap-2 py-2">
-            <div className="size-[clamp(140px,18vh,210px)] overflow-hidden rounded-full border border-zinc-900/15 bg-white shadow-sm">
-              <Image
-                src={avatarSrc}
-                alt="avatar"
-                width={420}
-                height={420}
-                className="h-full w-full object-cover"
-              />
+          <div className="relative grid place-items-center gap-2 py-2">
+            <div className="pointer-events-none absolute top-2 text-base font-semibold text-zinc-900/80">
+              {selectedUser?.name ?? "User"}
             </div>
-            <div className="text-xs text-zinc-900/60">
-              {selectedUser ? selectedUser.email : "（ユーザー未指定）"}
-            </div>
-          </div>
 
-          <div className="rounded-2xl border border-zinc-900/10 bg-zinc-900/[0.03] p-3">
-            <div className="mb-2 flex items-baseline justify-between">
-              <span className="text-xs font-semibold text-zinc-900/70">
+              <button
+                type="button"
+                onClick={() => setPickerOpen(true)}
+                className="group relative mt-8 size-[clamp(140px,18vh,210px)] overflow-hidden rounded-full border border-zinc-900/15 bg-white shadow-sm"
+                aria-label="open picker"
+              >
+                <Image
+                  src={avatarSrc}
+                  alt="avatar"
+                  width={420}
+                  height={420}
+                  className="h-full w-full object-cover"
+                  priority
+                />
+                <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/0 transition group-hover:bg-black/10">
+                  <div className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-zinc-900/70 opacity-0 shadow-sm transition group-hover:opacity-100">
+                    選択
+                  </div>
+                </div>
+              </button>
+
+              <div className="text-center text-xs text-zinc-900/60">
+                <div>
+                  {selectedMyEmailList
+                    ? `From: ${selectedMyEmailList.email}`
+                    : "From: （MyEmailList 未選択）"}
+                </div>
+                <div>
+                  {selectedEmailList
+                    ? `To: ${selectedEmailList.email}${selectedEmailList.name ? ` (${selectedEmailList.name})` : ""}`
+                    : "To: （EmailList 未選択）"}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-900/10 bg-zinc-900/[0.03] p-3">
+              <div className="mb-2 flex items-baseline justify-between">
+                <span className="text-xs font-semibold text-zinc-900/70">
                 反省度
               </span>
               <span className="font-mono text-sm text-zinc-900/60">{level}</span>
@@ -227,12 +266,22 @@ export default function GenerateClient() {
               />
             </div>
 
-            <Button type="submit" disabled={loading} size="lg">
+            <Button
+              type="submit"
+              disabled={loading || !userId || !myEmailListId || !emailListId}
+              size="lg"
+            >
               {loading ? "生成中..." : "生成する"}
             </Button>
           </form>
 
-          {subject || body ? (
+          {useGemini && resultJson && !error ? (
+            <div className="rounded-2xl border border-zinc-900/10 bg-white px-4 py-3 text-sm text-zinc-900/70">
+              Gemini モードでは JSON の確認のみできます。設定 → JSON確認 を開いてください。
+            </div>
+          ) : null}
+
+          {!useGemini && (subject || body) ? (
             <div className="grid gap-2">
               <div className="rounded-2xl border border-zinc-900/10 bg-white px-4 py-3">
                 <div className="text-xs font-semibold text-zinc-900/60">
@@ -284,58 +333,6 @@ export default function GenerateClient() {
               </CardHeader>
 
               <CardContent className="flex h-[calc(100%-56px)] flex-col gap-3 overflow-auto pb-6">
-                <div className="space-y-1">
-                  <Label htmlFor="userId">User（Email）</Label>
-                  <Select
-                    id="userId"
-                    value={userId}
-                    onChange={(e) => setUserId(e.target.value)}
-                  >
-                    <option value="">(指定しない)</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={String(u.id)}>
-                        {u.email}
-                        {u.name ? ` (${u.name})` : ""}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="myEmailListId">MyEmailList（Email）</Label>
-                  <Select
-                    id="myEmailListId"
-                    value={myEmailListId}
-                    onChange={(e) => setMyEmailListId(e.target.value)}
-                    disabled={!userId}
-                  >
-                    <option value="">(指定しない)</option>
-                    {myEmailLists.map((m) => (
-                      <option key={m.id} value={String(m.id)}>
-                        {m.email}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="emailListId">EmailList（Email）</Label>
-                  <Select
-                    id="emailListId"
-                    value={emailListId}
-                    onChange={(e) => setEmailListId(e.target.value)}
-                    disabled={!userId}
-                  >
-                    <option value="">(指定しない)</option>
-                    {emailLists.map((m) => (
-                      <option key={m.id} value={String(m.id)}>
-                        {m.email}
-                        {m.name ? ` (${m.name})` : ""}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-
                 <label className="mt-2 flex items-center gap-2 text-sm text-zinc-900/70">
                   <input
                     type="checkbox"
@@ -345,26 +342,117 @@ export default function GenerateClient() {
                   <span>Gemini を使う（useGemini=true）</span>
                 </label>
 
-                <details className="mt-2 overflow-hidden">
-                  <summary className="cursor-pointer select-none text-xs font-medium text-zinc-900/60">
-                    JSON確認
-                  </summary>
-                  <div className="mt-2 space-y-2">
-                    {sentJson ? (
-                      <pre className="max-h-80 overflow-auto rounded-xl border border-zinc-900/10 bg-white px-3 py-2 text-xs text-zinc-900/70">
-                        {sentJson}
-                      </pre>
-                    ) : null}
-                    {resultJson && !error ? (
-                      <pre className="max-h-80 overflow-auto rounded-xl border border-zinc-900/10 bg-white px-3 py-2 text-xs text-zinc-900/70">
-                        {resultJson}
-                      </pre>
-                    ) : null}
+                {useGemini ? (
+                  <details className="mt-2 overflow-hidden">
+                    <summary className="cursor-pointer select-none text-xs font-medium text-zinc-900/60">
+                      JSON確認
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                      {sentJson ? (
+                        <pre className="max-h-80 overflow-auto rounded-xl border border-zinc-900/10 bg-white px-3 py-2 text-xs text-zinc-900/70">
+                          {sentJson}
+                        </pre>
+                      ) : null}
+                      {resultJson && !error ? (
+                        <pre className="max-h-80 overflow-auto rounded-xl border border-zinc-900/10 bg-white px-3 py-2 text-xs text-zinc-900/70">
+                          {resultJson}
+                        </pre>
+                      ) : null}
+                    </div>
+                  </details>
+                ) : (
+                  <div className="text-xs text-zinc-900/50">
+                    Gemini を ON にすると JSON確認 が表示されます。
                   </div>
-                </details>
+                )}
               </CardContent>
             </Card>
           </div>
+        </div>
+      ) : null}
+
+      {pickerOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default bg-black/30"
+            onClick={() => setPickerOpen(false)}
+            aria-label="close picker"
+          />
+
+          <Card className="relative w-full max-w-[560px] overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between gap-3">
+              <CardTitle className="text-sm text-zinc-900/70">
+                宛先/ユーザー選択
+              </CardTitle>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setPickerOpen(false)}
+              >
+                閉じる
+              </Button>
+            </CardHeader>
+
+            <CardContent className="grid max-h-[80vh] gap-3 overflow-auto pb-6">
+                <div className="space-y-1">
+                  <Label htmlFor="userId">User（ユーザー名）</Label>
+                  <Select
+                    id="userId"
+                    value={userId}
+                    onChange={(e) => setUserId(e.target.value)}
+                  >
+                    <option value="">(選択してください)</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={String(u.id)}>
+                        {u.name ?? "User"}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="myEmailListId">MyEmailList（自分のEmail）</Label>
+                  <Select
+                    id="myEmailListId"
+                    value={myEmailListId}
+                    onChange={(e) => setMyEmailListId(e.target.value)}
+                    disabled={!userId}
+                  >
+                    <option value="">(選択してください)</option>
+                    {myEmailLists.map((m) => (
+                      <option key={m.id} value={String(m.id)}>
+                        {m.email}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="emailListId">EmailList（送信先）</Label>
+                  <Select
+                    id="emailListId"
+                    value={emailListId}
+                    onChange={(e) => setEmailListId(e.target.value)}
+                    disabled={!userId}
+                  >
+                    <option value="">(選択してください)</option>
+                    {emailLists.map((m) => (
+                      <option key={m.id} value={String(m.id)}>
+                        {m.email}
+                        {m.name ? `（${m.name}）` : ""}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="mt-2 flex justify-center">
+                  <Button type="button" size="lg" onClick={() => setPickerOpen(false)}>
+                    決定
+                  </Button>
+                </div>
+            </CardContent>
+          </Card>
         </div>
       ) : null}
     </div>
