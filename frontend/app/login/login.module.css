@@ -1,0 +1,76 @@
+/* ===== ページ全体 ===== */
+.loginWrapper {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-image: linear-gradient(to top, #fddb92 0%, #d1fdff 100%)
+}
+
+/* ===== ログイン後 ===== */
+.loggedIn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.avatar {
+  border-radius: 50%;
+}
+
+.signOutButton {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* ===== Google Sign In Button ===== */
+.gsiMaterialButton {
+  position: relative;
+  user-select: none;
+  appearance: none;
+  background-color: #fff;
+  border: 1px solid #dadce0;
+  border-radius: 9999px;
+  box-sizing: border-box;
+  color: #1f1f1f;
+  cursor: pointer;
+  font-family: Roboto, arial, sans-serif;
+  font-size: 18px;
+  height: 70px;
+  padding: 0 20px;
+  transition: background-color .218s, box-shadow .218s;
+}
+
+.gsiMaterialButton:hover {
+  box-shadow:
+    0 1px 2px rgba(60, 64, 67, 0.3),
+    0 1px 3px 1px rgba(60, 64, 67, 0.15);
+}
+
+.gsiMaterialButtonContentWrapper {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.gsiMaterialButtonIcon {
+  width: 40px;
+  height: 40px;
+  margin-right: 10px;
+}
+
+.gsiMaterialButtonContents {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.gsiMaterialButtonState {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}

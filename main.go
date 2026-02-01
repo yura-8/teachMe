@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"teachMe/db"
+	"teachMe/handler"
 	"teachMe/model"
 
 	"github.com/labstack/echo/v4"
@@ -38,7 +39,8 @@ func main() {
 		database.Find(&users) // DBから全ユーザー取得
 		return c.JSON(http.StatusOK, users)
 	})
-
+	userHandler := handler.NewUserHandler(database)
+	e.POST("/api/users/login", userHandler.LoginUser)
 	// サーバー起動
 	e.Logger.Fatal(e.Start(":8080"))
 }
