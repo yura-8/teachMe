@@ -3,18 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Send, ChevronDown, ChevronUp, Trash2, X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
-
-import * as PopoverPrimitive from "@radix-ui/react-popover";
-
 type Recipient = {
   id: number;
   user_id: number;
@@ -59,9 +47,6 @@ type SentMail = {
 const devUserID = 1;
 const API_BASE = "http://localhost:8080";
 const TEMPLATE_MARKER = "{{BODY}}";
-
-const amberBtn =
-  "bg-[#FFF1C9] text-slate-900 hover:bg-[#ffe7a3] active:bg-[#ffde88] disabled:opacity-60 disabled:pointer-events-none";
 
 const isProbablyEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 
@@ -121,18 +106,22 @@ export default function MailConfirmPage() {
   const [fromEmailInput, setFromEmailInput] = useState("");
   const [signatureInput, setSignatureInput] = useState("");
 
+  // 本文（テンプレ適用時はこのテキストエリアが実際に置換される）
   const [body, setBody] = useState("ここに生成された文章が入ります。適宜手直ししてください。");
   const [subject, setSubject] = useState("");
 
+  // dropdown open states
   const [openTo, setOpenTo] = useState(false);
   const [openFrom, setOpenFrom] = useState(false);
   const [openSig, setOpenSig] = useState(false);
 
+  // new recipient meta (only when registering a new email)
   const [showRecipientMeta, setShowRecipientMeta] = useState(false);
   const [pendingToEmail, setPendingToEmail] = useState("");
   const [pendingToName, setPendingToName] = useState("");
   const [pendingToAvatar, setPendingToAvatar] = useState("");
 
+  // history
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<SentMail[]>([]);
   const [historyScope, setHistoryScope] = useState<"selected" | "all">("selected");
@@ -142,6 +131,7 @@ export default function MailConfirmPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
+  // templates (optional)
   const [showTemplateArea, setShowTemplateArea] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templateInput, setTemplateInput] = useState(
@@ -149,16 +139,18 @@ export default function MailConfirmPage() {
   );
   const [openTpl, setOpenTpl] = useState(false);
 
+  // active template
   const [activeTemplateId, setActiveTemplateId] = useState<number | null>(null);
   const [activeTemplateContent, setActiveTemplateContent] = useState<string | null>(null);
 
   const selectedRecipient = useMemo(() => {
     const email = toEmailInput.trim().toLowerCase();
-    return recipients.find((r) => r.email?.trim().toLowerCase() === email);
+    return recipients.find((r) => r.email.trim().toLowerCase() === email);
   }, [recipients, toEmailInput]);
 
   const avatarUrl =
     selectedRecipient?.avatar_url || "https://api.dicebear.com/7.x/pixel-art/svg?seed=Teacher";
+
   const selectedRecipientName = selectedRecipient?.name?.trim() || "（未保存の宛先）";
 
   const refetchAll = async () => {
@@ -172,26 +164,36 @@ export default function MailConfirmPage() {
     const myEmailsData = (await myEmailsRes.json()) as MyEmail[];
     const sigsData = (await sigsRes.json()) as Signature[];
 
-    setRecipients(Array.isArray(emailsData) ? emailsData : []);
-    setMyEmails(Array.isArray(myEmailsData) ? myEmailsData : []);
-    setSignatures(Array.isArray(sigsData) ? sigsData : []);
+    setRecipients(emailsData);
+    setMyEmails(myEmailsData);
+    setSignatures(sigsData);
 
-    if (!toEmailInput && Array.isArray(emailsData) && emailsData.length > 0) setToEmailInput(emailsData[0].email);
-    if (!fromEmailInput && Array.isArray(myEmailsData) && myEmailsData.length > 0) setFromEmailInput(myEmailsData[0].email);
-    if (!signatureInput && Array.isArray(sigsData) && sigsData.length > 0) setSignatureInput(sigsData[0].content);
+    if (!toEmailInput && emailsData.length > 0) setToEmailInput(emailsData[0].email);
+    if (!fromEmailInput && myEmailsData.length > 0) setFromEmailInput(myEmailsData[0].email);
+    if (!signatureInput && sigsData.length > 0) setSignatureInput(sigsData[0].content);
   };
 
   useEffect(() => {
-    refetchAll().catch(() => {});
+    refetchAll().catch((e) => console.error(e));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ----------------------------
+  // Save / Delete: Recipients
+  // ----------------------------
+
   const saveRecipient = async () => {
     const email = toEmailInput.trim();
-    if (!isProbablyEmail(email)) return alert("宛先のメール形式を確認してください");
+    if (!isProbablyEmail(email)) {
+      alert("宛先のメール形式を確認してください");
+      return;
+    }
 
-    const exists = recipients.some((r) => r.email?.trim().toLowerCase() === email.toLowerCase());
-    if (exists) return alert("この宛先は既に登録されています");
+    const exists = recipients.some((r) => r.email.trim().toLowerCase() === email.toLowerCase());
+    if (exists) {
+      alert("この宛先は既に登録されています");
+      return;
+    }
 
     setPendingToEmail(email);
     setPendingToName("");
@@ -202,12 +204,16 @@ export default function MailConfirmPage() {
 
   const confirmSaveRecipient = async () => {
     const email = pendingToEmail.trim();
-    if (!isProbablyEmail(email)) return alert("宛先のメール形式を確認してください");
+    if (!isProbablyEmail(email)) {
+      alert("宛先のメール形式を確認してください");
+      return;
+    }
 
-    const exists = recipients.some((r) => r.email?.trim().toLowerCase() === email.toLowerCase());
+    const exists = recipients.some((r) => r.email.trim().toLowerCase() === email.toLowerCase());
     if (exists) {
+      alert("この宛先は既に登録されています");
       setShowRecipientMeta(false);
-      return alert("この宛先は既に登録されています");
+      return;
     }
 
     const payload = {
@@ -227,13 +233,15 @@ export default function MailConfirmPage() {
 
       if (!res.ok) {
         const j = await res.json().catch(() => null);
-        return alert(j?.error || "宛先の保存に失敗しました");
+        alert(j?.error || "宛先の保存に失敗しました");
+        return;
       }
 
       setShowRecipientMeta(false);
       setToEmailInput(email);
       await refetchAll();
-    } catch {
+    } catch (e) {
+      console.error(e);
       alert("宛先の保存に失敗しました");
     } finally {
       setBusy(false);
@@ -242,10 +250,16 @@ export default function MailConfirmPage() {
 
   const saveMyEmail = async () => {
     const email = fromEmailInput.trim();
-    if (!isProbablyEmail(email)) return alert("送信元のメール形式を確認してください");
+    if (!isProbablyEmail(email)) {
+      alert("送信元のメール形式を確認してください");
+      return;
+    }
 
-    const exists = myEmails.some((m) => m.email?.trim().toLowerCase() === email.toLowerCase());
-    if (exists) return alert("この送信元は既に登録されています");
+    const exists = myEmails.some((m) => m.email.trim().toLowerCase() === email.toLowerCase());
+    if (exists) {
+      alert("この送信元は既に登録されています");
+      return;
+    }
 
     const payload = { user_id: devUserID, email };
 
@@ -257,15 +271,20 @@ export default function MailConfirmPage() {
         body: JSON.stringify(payload),
       });
 
-      if (res.status === 409) return alert("この送信元は既に登録されています");
+      if (res.status === 409) {
+        alert("この送信元は既に登録されています");
+        return;
+      }
 
       if (!res.ok) {
         const j = await res.json().catch(() => null);
-        return alert(j?.error || "送信元の保存に失敗しました");
+        alert(j?.error || "送信元の保存に失敗しました");
+        return;
       }
 
       await refetchAll();
-    } catch {
+    } catch (e) {
+      console.error(e);
       alert("送信元の保存に失敗しました");
     } finally {
       setBusy(false);
@@ -274,10 +293,16 @@ export default function MailConfirmPage() {
 
   const saveSignature = async () => {
     const content = signatureInput.trim();
-    if (!content) return alert("署名が空です");
+    if (!content) {
+      alert("署名が空です");
+      return;
+    }
 
-    const exists = signatures.some((s) => s.content?.trim() === content);
-    if (exists) return alert("同じ署名が既に登録されています");
+    const exists = signatures.some((s) => s.content.trim() === content);
+    if (exists) {
+      alert("同じ署名が既に登録されています");
+      return;
+    }
 
     const payload = { user_id: devUserID, content };
 
@@ -289,26 +314,35 @@ export default function MailConfirmPage() {
         body: JSON.stringify(payload),
       });
 
-      if (res.status === 409) return alert("同じ署名が既に登録されています");
+      if (res.status === 409) {
+        alert("同じ署名が既に登録されています");
+        return;
+      }
 
       if (!res.ok) {
         const j = await res.json().catch(() => null);
-        return alert(j?.error || "署名の保存に失敗しました");
+        alert(j?.error || "署名の保存に失敗しました");
+        return;
       }
 
       await refetchAll();
-    } catch {
+    } catch (e) {
+      console.error(e);
       alert("署名の保存に失敗しました");
     } finally {
       setBusy(false);
     }
   };
 
+  // ----------------------------
+  // Templates
+  // ----------------------------
+
   const fetchTemplates = async () => {
     const toEmail = toEmailInput.trim().toLowerCase();
     const fromEmail = fromEmailInput.trim().toLowerCase();
-    const recipient = recipients.find((r) => r.email?.trim().toLowerCase() === toEmail);
-    const my = myEmails.find((m) => m.email?.trim().toLowerCase() === fromEmail);
+    const recipient = recipients.find((r) => r.email.trim().toLowerCase() === toEmail);
+    const my = myEmails.find((m) => m.email.trim().toLowerCase() === fromEmail);
 
     if (!recipient || !my) {
       setTemplates([]);
@@ -316,12 +350,14 @@ export default function MailConfirmPage() {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/templates?email_list_id=${recipient.id}&my_email_list_id=${my.id}`);
+      const res = await fetch(
+        `${API_BASE}/templates?email_list_id=${recipient.id}&my_email_list_id=${my.id}`
+      );
       if (!res.ok) return;
-      const data = await res.json().catch(() => []);
-      setTemplates(Array.isArray(data) ? data : []);
+      const data: Template[] = await res.json();
+      setTemplates(data);
     } catch {
-      setTemplates([]);
+      // ignore
     }
   };
 
@@ -332,12 +368,16 @@ export default function MailConfirmPage() {
   }, [showTemplateArea, toEmailInput, fromEmailInput, recipients, myEmails]);
 
   const handleApplyTemplate = (tpl: Template) => {
+    // 古いテンプレで包まれていれば「中身」だけ抜いて、新テンプレに差し替え
     const raw = extractRawFromTemplatedBody(body, activeTemplateContent);
+
     try {
       validateTemplateOrThrow(tpl.content);
     } catch (e: any) {
-      return alert(e.message || "テンプレが不正です");
+      alert(e.message || "テンプレが不正です");
+      return;
     }
+
     setBody(applyTemplate(tpl.content, raw));
     setActiveTemplateId(tpl.id);
     setActiveTemplateContent(tpl.content);
@@ -357,15 +397,19 @@ export default function MailConfirmPage() {
     try {
       validateTemplateOrThrow(content);
     } catch (e: any) {
-      return alert(e.message || "テンプレが不正です");
+      alert(e.message || "テンプレが不正です");
+      return;
     }
 
     const toEmail = toEmailInput.trim().toLowerCase();
     const fromEmail = fromEmailInput.trim().toLowerCase();
-    const recipient = recipients.find((r) => r.email?.trim().toLowerCase() === toEmail);
-    const my = myEmails.find((m) => m.email?.trim().toLowerCase() === fromEmail);
+    const recipient = recipients.find((r) => r.email.trim().toLowerCase() === toEmail);
+    const my = myEmails.find((m) => m.email.trim().toLowerCase() === fromEmail);
 
-    if (!recipient || !my) return alert("テンプレは「保存済みの宛先/送信元」を選んだ状態で登録してください");
+    if (!recipient || !my) {
+      alert("テンプレは「保存済みの宛先/送信元」を選んだ状態で登録してください");
+      return;
+    }
 
     const payload = {
       content,
@@ -382,26 +426,34 @@ export default function MailConfirmPage() {
         body: JSON.stringify(payload),
       });
 
-      if (res.status === 409) return alert("同じテンプレが既に登録されています");
+      if (res.status === 409) {
+        alert("同じテンプレが既に登録されています");
+        return;
+      }
 
       if (!res.ok) {
         const j = await res.json().catch(() => null);
-        return alert(j?.error || "テンプレの保存に失敗しました");
+        alert(j?.error || "テンプレの保存に失敗しました");
+        return;
       }
 
       const created: Template | null = await res.json().catch(() => null);
       const tplContent = created?.content ?? content;
 
+      // 保存したらそのまま即適用（本文テキストエリアが置換される）
       const raw = extractRawFromTemplatedBody(body, activeTemplateContent);
       setBody(applyTemplate(tplContent, raw));
       setActiveTemplateId(created?.id ?? null);
       setActiveTemplateContent(tplContent);
 
-      setTemplateInput(`お世話になっております。\n\n${TEMPLATE_MARKER}\n\n何卒よろしくお願いいたします。`);
+      setTemplateInput(
+        `お世話になっております。\n\n${TEMPLATE_MARKER}\n\n何卒よろしくお願いいたします。`
+      );
       setOpenTpl(false);
       await fetchTemplates();
       alert("テンプレを保存し、本文に適用しました");
-    } catch {
+    } catch (e) {
+      console.error(e);
       alert("テンプレの保存に失敗しました");
     } finally {
       setBusy(false);
@@ -414,16 +466,27 @@ export default function MailConfirmPage() {
       const res = await fetch(`${API_BASE}/templates/${id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) {
         const j = await res.json().catch(() => null);
-        return alert(j?.error || "削除に失敗しました");
+        alert(j?.error || "削除に失敗しました");
+        return;
       }
-      if (activeTemplateId === id) clearTemplate();
+
+      // 削除したテンプレが適用中だったら解除
+      if (activeTemplateId === id) {
+        clearTemplate();
+      }
+
       await fetchTemplates();
-    } catch {
+    } catch (e) {
+      console.error(e);
       alert("削除に失敗しました");
     } finally {
       setBusy(false);
     }
   };
+
+  // ----------------------------
+  // Deletes: Recipient/MyEmail/Signature
+  // ----------------------------
 
   const deleteRecipientById = async (id: number) => {
     try {
@@ -431,10 +494,12 @@ export default function MailConfirmPage() {
       const res = await fetch(`${API_BASE}/emails/${id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) {
         const j = await res.json().catch(() => null);
-        return alert(j?.error || "削除に失敗しました");
+        alert(j?.error || "削除に失敗しました");
+        return;
       }
       await refetchAll();
-    } catch {
+    } catch (e) {
+      console.error(e);
       alert("削除に失敗しました");
     } finally {
       setBusy(false);
@@ -447,10 +512,12 @@ export default function MailConfirmPage() {
       const res = await fetch(`${API_BASE}/my-emails/${id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) {
         const j = await res.json().catch(() => null);
-        return alert(j?.error || "削除に失敗しました");
+        alert(j?.error || "削除に失敗しました");
+        return;
       }
       await refetchAll();
-    } catch {
+    } catch (e) {
+      console.error(e);
       alert("削除に失敗しました");
     } finally {
       setBusy(false);
@@ -463,29 +530,48 @@ export default function MailConfirmPage() {
       const res = await fetch(`${API_BASE}/signatures/${id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) {
         const j = await res.json().catch(() => null);
-        return alert(j?.error || "削除に失敗しました");
+        alert(j?.error || "削除に失敗しました");
+        return;
       }
       await refetchAll();
-    } catch {
+    } catch (e) {
+      console.error(e);
       alert("削除に失敗しました");
     } finally {
       setBusy(false);
     }
   };
 
+  // ----------------------------
+  // Send (save history)
+  // ----------------------------
+
   const handleSendAndSave = async () => {
     const toEmail = toEmailInput.trim().toLowerCase();
     const fromEmail = fromEmailInput.trim().toLowerCase();
 
-    if (!isProbablyEmail(toEmail) || !isProbablyEmail(fromEmail)) return alert("宛先/送信元のメール形式を確認してください");
+    if (!isProbablyEmail(toEmail) || !isProbablyEmail(fromEmail)) {
+      alert("宛先/送信元のメール形式を確認してください");
+      return;
+    }
 
-    const recipient = recipients.find((r) => r.email?.trim().toLowerCase() === toEmail);
-    const my = myEmails.find((m) => m.email?.trim().toLowerCase() === fromEmail);
+    const recipient = recipients.find((r) => r.email.trim().toLowerCase() === toEmail);
+    const my = myEmails.find((m) => m.email.trim().toLowerCase() === fromEmail);
 
-    if (!recipient) return alert("宛先が未保存です。先に「保存」を押してください。");
-    if (!my) return alert("送信元が未保存です。先に「保存」を押してください。");
-    if (!signatureInput.trim()) return alert("署名が空です。入力してください。");
+    if (!recipient) {
+      alert("宛先が未保存です。先に「保存」を押してください。");
+      return;
+    }
+    if (!my) {
+      alert("送信元が未保存です。先に「保存」を押してください。");
+      return;
+    }
+    if (!signatureInput.trim()) {
+      alert("署名が空です。入力してください。");
+      return;
+    }
 
+    // 本文テキストエリアの内容（テンプレ適用時は既に置換済み）
     const fullMessage = `${body}\n\n${signatureInput}`;
 
     const payload = {
@@ -510,12 +596,17 @@ export default function MailConfirmPage() {
         const j = await response.json().catch(() => null);
         alert(j?.error || "履歴の保存に失敗しました");
       }
-    } catch {
+    } catch (error) {
+      console.error("送信エラー:", error);
       alert("送信エラーが発生しました");
     } finally {
       setBusy(false);
     }
   };
+
+  // ----------------------------
+  // History fetch
+  // ----------------------------
 
   const fetchHistory = async () => {
     setHistoryLoading(true);
@@ -525,8 +616,12 @@ export default function MailConfirmPage() {
       const toEmail = toEmailInput.trim().toLowerCase();
       const fromEmail = fromEmailInput.trim().toLowerCase();
 
-      const recipient = recipients.find((r) => r.email?.trim().toLowerCase() === toEmail);
-      const my = myEmails.find((m) => m.email?.trim().toLowerCase() === fromEmail);
+      const recipient = recipients.find(
+        (r) => r.email?.trim().toLowerCase() === toEmail
+      );
+      const my = myEmails.find(
+        (m) => m.email?.trim().toLowerCase() === fromEmail
+      );
 
       const params = new URLSearchParams();
       params.set("sort", historySort);
@@ -548,13 +643,15 @@ export default function MailConfirmPage() {
 
       const json = await res.json().catch(() => []);
       setHistory(Array.isArray(json) ? json : []);
-    } catch {
+    } catch (e) {
+      console.error(e);
       setHistoryError("履歴の取得に失敗しました");
       setHistory([]);
     } finally {
       setHistoryLoading(false);
     }
   };
+
 
   useEffect(() => {
     if (!showHistory) return;
@@ -572,128 +669,148 @@ export default function MailConfirmPage() {
     myEmails,
   ]);
 
-  const safeHistory = Array.isArray(history) ? history : [];
-
   return (
     <div className="min-h-screen bg-slate-100">
       <div className="mx-auto max-w-6xl px-4 py-10">
+        {/* Header */}
         <div className="mb-8 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-slate-900">ご教授ください</h1>
-          <Button variant="outline" className="rounded-xl" type="button" onClick={() => setShowHistory((v) => !v)}>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">ご教授ください</h1>
+          </div>
+          <button
+            className="text-sm px-4 h-10 rounded-xl border bg-white hover:bg-slate-50"
+            type="button"
+            onClick={() => setShowHistory((v) => !v)}
+          >
             {showHistory ? "履歴を閉じる" : "履歴を見る"}
-          </Button>
+          </button>
         </div>
 
+        {/* Grid */}
         <div className="grid grid-cols-12 gap-6">
-          <div className="col-span-12 md:col-span-3 space-y-6">
-            <Card className="rounded-2xl">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3">
-                  <img src={avatarUrl} alt="avatar" className="h-12 w-12 rounded-2xl border bg-white" />
-                  <div className="min-w-0">
-                    <div className="text-sm text-slate-500">宛先（教授）</div>
-                    <div className="font-bold text-slate-900 truncate">{selectedRecipientName}</div>
-                    <div className="text-xs text-slate-500 truncate">{selectedRecipient?.email}</div>
-                  </div>
+          {/* Left card */}
+          <div className="col-span-12 md:col-span-3">
+            <div className="bg-white border rounded-2xl shadow-sm p-6">
+              <div className="flex items-center gap-3">
+                <img src={avatarUrl} alt="avatar" className="h-12 w-12 rounded-2xl border bg-white" />
+                <div className="min-w-0">
+                  <div className="text-sm text-slate-500">宛先（教授）</div>
+                  <div className="font-bold text-slate-900 truncate">{selectedRecipientName}</div>
+                  <div className="text-xs text-slate-500 truncate">{selectedRecipient?.email}</div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
+            {/* History */}
             {showHistory && (
-              <Card className="rounded-2xl">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">送信履歴</CardTitle>
-                    <Button variant="outline" className="h-8 rounded-xl text-xs px-3" type="button" onClick={fetchHistory} disabled={historyLoading}>
-                      更新
-                    </Button>
+              <div className="mt-6 bg-white border rounded-2xl shadow-sm p-6">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-slate-900">送信履歴</div>
+                  <button
+                    type="button"
+                    className="text-xs px-3 h-8 rounded-xl border bg-white hover:bg-slate-50"
+                    onClick={fetchHistory}
+                    disabled={historyLoading}
+                  >
+                    更新
+                  </button>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  <div className="flex gap-2">
+                    <select
+                      className="h-9 rounded-lg border px-2 bg-white text-sm w-full sm:w-auto min-w-0"
+                      value={historyScope}
+                      onChange={(e) => setHistoryScope(e.target.value as any)}
+                    >
+                      <option value="selected">この宛先/送信元</option>
+                      <option value="all">全て</option>
+                    </select>
+
+                    <select
+                      className="h-9 rounded-lg border px-2 bg-white text-sm w-full sm:w-auto min-w-0"
+                      value={historySort}
+                      onChange={(e) => setHistorySort(e.target.value as any)}
+                    >
+                      <option value="desc">新しい順</option>
+                      <option value="asc">古い順</option>
+                    </select>
                   </div>
-                </CardHeader>
 
-                <CardContent className="pt-0 space-y-3">
-                  <div className="flex flex-wrap gap-2">
-                    <Select value={historyScope} onValueChange={(v) => setHistoryScope(v as any)}>
-                      <SelectTrigger className="h-9 rounded-lg w-full sm:w-auto">
-                        <SelectValue placeholder="範囲" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="selected">この宛先/送信元</SelectItem>
-                        <SelectItem value="all">全て</SelectItem>
-                      </SelectContent>
-                    </Select>
-
-                    <Select value={historySort} onValueChange={(v) => setHistorySort(v as any)}>
-                      <SelectTrigger className="h-9 rounded-lg w-full sm:w-auto">
-                        <SelectValue placeholder="並び" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="desc">新しい順</SelectItem>
-                        <SelectItem value="asc">古い順</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Input
-                      className="h-9 rounded-lg w-full min-w-0"
+                  <div className="flex gap-2">
+                    <input
+                      className="flex-1 h-9 rounded-lg border px-2 bg-white text-sm"
                       placeholder="本文検索（部分一致）"
                       value={historyQuery}
                       onChange={(e) => setHistoryQuery(e.target.value)}
                     />
-
-                    <Select value={String(historyLimit)} onValueChange={(v) => setHistoryLimit(Number(v))}>
-                      <SelectTrigger className="h-9 rounded-lg w-full sm:w-auto">
-                        <SelectValue placeholder="件数" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="10">10</SelectItem>
-                        <SelectItem value="25">25</SelectItem>
-                        <SelectItem value="50">50</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <select
+                      className="h-9 rounded-lg border px-2 bg-white text-sm w-full sm:w-auto min-w-0"
+                      value={historyLimit}
+                      onChange={(e) => setHistoryLimit(Number(e.target.value))}
+                    >
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                    </select>
                   </div>
 
                   {historyError && <div className="text-xs text-red-600">{historyError}</div>}
 
                   {historyLoading ? (
                     <div className="text-sm text-slate-500">読み込み中…</div>
-                  ) : safeHistory.length === 0 ? (
+                  ) : history.length === 0 ? (
                     <div className="text-sm text-slate-500">履歴がありません</div>
                   ) : (
                     <div className="space-y-3">
-                      {safeHistory.map((m) => (
+                      {history.map((m) => (
                         <div key={m.id} className="rounded-xl border bg-slate-50 p-3">
                           <div className="space-y-1">
-                            <div className="text-xs text-slate-500">{new Date(m.created_at).toLocaleString()}</div>
+                            <div className="text-xs text-slate-500">
+                              {new Date(m.created_at).toLocaleString()}
+                            </div>
+
                             <div className="text-xs text-slate-600">
                               <div>
-                                To: <span className="font-mono">{m.to_email ?? `#${m.email_list_id}`}</span>
+                                To:{" "}
+                                <span className="font-mono">{m.to_email ?? `#${m.email_list_id}`}</span>
                               </div>
                               <div>
-                                From: <span className="font-mono">{m.from_email ?? `#${m.my_email_list_id}`}</span>
+                                From:{" "}
+                                <span className="font-mono">
+                                  {m.from_email ?? `#${m.my_email_list_id}`}
+                                </span>
                               </div>
                             </div>
-                            <div className="font-mono whitespace-pre-wrap text-slate-800 text-xs">{m.content}</div>
+
+                            <div className="font-mono whitespace-pre-wrap text-slate-800 text-xs">
+                              {m.content}
+                            </div>
                           </div>
                         </div>
                       ))}
                     </div>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             )}
           </div>
 
+          {/* Main card */}
           <div className="col-span-12 md:col-span-9">
-            <Card className="rounded-2xl">
-              <CardContent className="p-8">
+            <div className="bg-white border rounded-2xl shadow-sm">
+              <div className="p-8">
+                {/* To / From */}
                 <div className="grid grid-cols-12 gap-6 items-end">
-                  <div className="col-span-12 md:col-span-6">
-                    <Label className="text-sm font-semibold text-slate-700">Email（宛先）</Label>
+                  {/* 宛先 */}
+                  <div className="col-span-12 md:col-span-6 relative">
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      Email（宛先）
+                    </label>
 
-                    <div className="mt-2 flex gap-2">
-                      <Input
-                        className="h-11 rounded-lg"
+                    <div className="flex gap-2">
+                      <input
+                        className="flex-1 h-11 rounded-lg border px-3 bg-white"
                         placeholder="prof@university.ac.jp"
                         value={toEmailInput}
                         onChange={(e) => setToEmailInput(e.target.value)}
@@ -702,175 +819,189 @@ export default function MailConfirmPage() {
                           setShowRecipientMeta(false);
                         }}
                       />
-
-                      <Button className={`h-11 rounded-xl px-4 ${amberBtn}`} type="button" onClick={saveRecipient} disabled={busy}>
+                      <button
+                        className="h-11 px-4 rounded-xl bg-amber-100 text-slate-800 font-semibold hover:bg-amber-200 transition disabled:opacity-60"
+                        onClick={saveRecipient}
+                        disabled={busy}
+                        type="button"
+                      >
                         保存
-                      </Button>
-
-                      <Popover open={openTo} onOpenChange={setOpenTo}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className="h-11 w-11 rounded-xl px-0"
-                            type="button"
-                            aria-label="宛先候補を開く"
-                          >
-                            {openTo ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                          </Button>
-                        </PopoverTrigger>
-
-                        <PopoverPrimitive.Portal>
-                          <PopoverContent className="z-50 p-0 rounded-xl w-72 max-w-[calc(100vw-24px)]" align="end" sideOffset={8} collisionPadding={12}>
-                            <ScrollArea className="max-h-56">
-                              {recipients.length === 0 ? (
-                                <div className="p-3 text-sm text-slate-500">候補がありません</div>
-                              ) : (
-                                recipients.map((r, idx) => (
-                                  <div key={r.id}>
-                                    <div className="flex items-stretch">
-                                      <Button
-                                        variant="ghost"
-                                        className="flex-1 h-auto justify-start rounded-none px-4 py-3 text-left"
-                                        type="button"
-                                        onClick={() => {
-                                          setToEmailInput(r.email);
-                                          setOpenTo(false);
-                                          setShowRecipientMeta(false);
-                                        }}
-                                      >
-                                        <div className="w-full">
-                                          <div className="font-semibold text-slate-900">{r.email}</div>
-                                          <div className="text-xs text-slate-500">{r.name}</div>
-                                        </div>
-                                      </Button>
-
-                                      <Button
-                                        variant="ghost"
-                                        className="w-12 rounded-none text-red-500 hover:bg-red-50"
-                                        type="button"
-                                        aria-label="宛先を削除"
-                                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                                          e.stopPropagation();
-                                          deleteRecipientById(r.id);
-                                        }}
-                                      >
-                                        <Trash2 size={18} />
-                                      </Button>
-                                    </div>
-
-                                    {idx !== recipients.length - 1 && <Separator />}
-                                  </div>
-                                ))
-                              )}
-                            </ScrollArea>
-                          </PopoverContent>
-                        </PopoverPrimitive.Portal>
-                      </Popover>
+                      </button>
+                      <button
+                        className="h-11 w-11 rounded-xl border bg-white hover:bg-slate-50 flex items-center justify-center"
+                        onClick={() => setOpenTo((v) => !v)}
+                        type="button"
+                        aria-label="宛先候補を開く"
+                      >
+                        {openTo ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      </button>
                     </div>
 
+                    {/* ★新規登録時だけ追加情報 */}
                     {showRecipientMeta && (
-                      <Card className="mt-4 rounded-2xl bg-slate-50">
-                        <CardContent className="p-5">
-                          <div className="flex items-center justify-between gap-4">
-                            <div>
-                              <div className="text-sm font-semibold text-slate-900">新しい宛先を登録</div>
-                              <div className="text-sm text-slate-500 mt-1">
-                                Email: <span className="font-mono">{pendingToEmail}</span>
-                              </div>
+                      <div className="mt-4 rounded-2xl border bg-slate-50 p-5">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="text-sm">
+                            <div className="font-semibold text-slate-800">新しい宛先を登録</div>
+                            <div className="text-slate-500 mt-1">
+                              Email: <span className="font-mono">{pendingToEmail}</span>
                             </div>
-                            <Button variant="outline" className="h-9 w-9 rounded-xl p-0" type="button" onClick={() => setShowRecipientMeta(false)} aria-label="閉じる">
-                              <X size={18} />
-                            </Button>
                           </div>
+                          <button
+                            className="h-9 w-9 rounded-xl border bg-white hover:bg-slate-50 flex items-center justify-center"
+                            onClick={() => setShowRecipientMeta(false)}
+                            type="button"
+                            aria-label="閉じる"
+                          >
+                            <X size={18} />
+                          </button>
+                        </div>
 
-                          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <Input className="h-10 rounded-lg" placeholder="教授名（任意）" value={pendingToName} onChange={(e) => setPendingToName(e.target.value)} />
-                            <Input className="h-10 rounded-lg" placeholder="アイコンURL（任意）" value={pendingToAvatar} onChange={(e) => setPendingToAvatar(e.target.value)} />
-                          </div>
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <input
+                            className="h-10 rounded-lg border px-3 bg-white text-sm"
+                            placeholder="教授名（任意）"
+                            value={pendingToName}
+                            onChange={(e) => setPendingToName(e.target.value)}
+                          />
+                          <input
+                            className="h-10 rounded-lg border px-3 bg-white text-sm"
+                            placeholder="アイコンURL（任意）"
+                            value={pendingToAvatar}
+                            onChange={(e) => setPendingToAvatar(e.target.value)}
+                          />
+                        </div>
 
-                          <div className="mt-4">
-                            <Button className="h-11 rounded-xl bg-blue-600 text-white hover:bg-blue-700" type="button" onClick={confirmSaveRecipient} disabled={busy}>
-                              登録する
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
+                        <div className="mt-4">
+                          <button
+                            className="h-11 px-4 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50"
+                            onClick={confirmSaveRecipient}
+                            disabled={busy}
+                            type="button"
+                          >
+                            登録する
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 宛先候補（候補内に削除🗑） */}
+                    {openTo && (
+                      <div className="absolute z-20 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
+                        <div className="max-h-56 overflow-auto">
+                          {recipients.length === 0 ? (
+                            <div className="p-3 text-sm text-slate-500">候補がありません</div>
+                          ) : (
+                            recipients.map((r) => (
+                              <div key={r.id} className="flex items-stretch border-b last:border-b-0">
+                                <button
+                                  className="flex-1 text-left px-4 py-3 hover:bg-slate-50 text-sm"
+                                  onClick={() => {
+                                    setToEmailInput(r.email);
+                                    setOpenTo(false);
+                                    setShowRecipientMeta(false);
+                                  }}
+                                  type="button"
+                                >
+                                  <div className="font-semibold text-slate-800">{r.email}</div>
+                                  <div className="text-xs text-slate-500">{r.name}</div>
+                                </button>
+                                <button
+                                  className="w-12 flex items-center justify-center hover:bg-red-50 text-red-500"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteRecipientById(r.id);
+                                  }}
+                                  type="button"
+                                  aria-label="宛先を削除"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
 
-                  <div className="col-span-12 md:col-span-6">
-                    <Label className="text-sm font-semibold text-slate-700">送信元アドレス</Label>
+                  {/* 送信元 */}
+                  <div className="col-span-12 md:col-span-6 relative">
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      送信元アドレス
+                    </label>
 
-                    <div className="mt-2 flex gap-2">
-                      <Input
-                        className="h-11 rounded-lg"
+                    <div className="flex gap-2">
+                      <input
+                        className="flex-1 h-11 rounded-lg border px-3 bg-white"
                         placeholder="me@example.com"
                         value={fromEmailInput}
                         onChange={(e) => setFromEmailInput(e.target.value)}
                         onFocus={() => setOpenFrom(false)}
                       />
-
-                      <Button className={`h-11 rounded-xl px-4 ${amberBtn}`} type="button" onClick={saveMyEmail} disabled={busy}>
+                      <button
+                        className="h-11 px-4 rounded-xl bg-amber-100 text-slate-800 font-semibold hover:bg-amber-200 transition disabled:opacity-60"
+                        onClick={saveMyEmail}
+                        disabled={busy}
+                        type="button"
+                      >
                         保存
-                      </Button>
-
-                      <Popover open={openFrom} onOpenChange={setOpenFrom}>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" className="h-11 w-11 rounded-xl px-0" type="button" aria-label="送信元候補を開く">
-                            {openFrom ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="z-50 p-0 rounded-xl w-72 max-w-[calc(100vw-24px)]" align="end" sideOffset={8} collisionPadding={12}>
-                          <ScrollArea className="max-h-56">
-                            {myEmails.length === 0 ? (
-                              <div className="p-3 text-sm text-slate-500">候補がありません</div>
-                            ) : (
-                              myEmails.map((m, idx) => (
-                                <div key={m.id}>
-                                  <div className="flex items-stretch">
-                                    <Button
-                                      variant="ghost"
-                                      className="flex-1 h-auto justify-start rounded-none px-4 py-3 text-left"
-                                      type="button"
-                                      onClick={() => {
-                                        setFromEmailInput(m.email);
-                                        setOpenFrom(false);
-                                      }}
-                                    >
-                                      <div className="w-full">
-                                        <div className="font-semibold text-slate-900">{m.email}</div>
-                                      </div>
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      className="w-12 rounded-none text-red-500 hover:bg-red-50"
-                                      type="button"
-                                      aria-label="送信元を削除"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        deleteMyEmailById(m.id);
-                                      }}
-                                    >
-                                      <Trash2 size={18} />
-                                    </Button>
-                                  </div>
-                                  {idx !== myEmails.length - 1 && <Separator />}
-                                </div>
-                              ))
-                            )}
-                          </ScrollArea>
-                        </PopoverContent>
-                      </Popover>
+                      </button>
+                      <button
+                        className="h-11 w-11 rounded-xl border bg-white hover:bg-slate-50 flex items-center justify-center"
+                        onClick={() => setOpenFrom((v) => !v)}
+                        type="button"
+                        aria-label="送信元候補を開く"
+                      >
+                        {openFrom ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      </button>
                     </div>
+
+                    {openFrom && (
+                      <div className="absolute z-20 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
+                        <div className="max-h-56 overflow-auto">
+                          {myEmails.length === 0 ? (
+                            <div className="p-3 text-sm text-slate-500">候補がありません</div>
+                          ) : (
+                            myEmails.map((m) => (
+                              <div key={m.id} className="flex items-stretch border-b last:border-b-0">
+                                <button
+                                  className="flex-1 text-left px-4 py-3 hover:bg-slate-50 text-sm"
+                                  onClick={() => {
+                                    setFromEmailInput(m.email);
+                                    setOpenFrom(false);
+                                  }}
+                                  type="button"
+                                >
+                                  <div className="font-semibold text-slate-800">{m.email}</div>
+                                </button>
+                                <button
+                                  className="w-12 flex items-center justify-center hover:bg-red-50 text-red-500"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteMyEmailById(m.id);
+                                  }}
+                                  type="button"
+                                  aria-label="送信元を削除"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
+                {/* content area */}
                 <div className="mt-8 rounded-2xl bg-slate-50 p-8">
                   <div className="space-y-6">
                     <div>
-                      <Label className="text-sm font-semibold text-slate-700">件名</Label>
-                      <Input
-                        className="mt-2 h-11 rounded-lg bg-white"
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">件名</label>
+                      <input
+                        className="w-full h-11 rounded-lg border px-3 bg-white"
                         placeholder="例）【欠席連絡】体調不良のため"
                         value={subject}
                         onChange={(e) => setSubject(e.target.value)}
@@ -878,35 +1009,21 @@ export default function MailConfirmPage() {
                     </div>
 
                     <div>
-                      <Label className="text-sm font-semibold text-slate-700">本文</Label>
-                      <Textarea
-                        className="mt-2 min-h-[220px] rounded-lg bg-white"
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">本文</label>
+                      <textarea
+                        className="w-full min-h-[220px] rounded-lg border p-4 resize-none bg-white"
                         placeholder="本文を入力してください"
                         value={body}
                         onChange={(e) => setBody(e.target.value)}
                       />
-
-                      {activeTemplateContent && (
-                        <Card className="mt-3 rounded-xl">
-                          <CardContent className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div className="text-sm font-semibold text-slate-900">テンプレ適用中（ID: {activeTemplateId ?? "—"}）</div>
-                              <Button variant="outline" className="h-9 rounded-xl text-sm px-3" type="button" onClick={clearTemplate}>
-                                <X size={16} />
-                                <span className="ml-2">解除</span>
-                              </Button>
-                            </div>
-                            <div className="mt-2 text-xs text-slate-500">※ テンプレ切替時は、可能なら前テンプレの「本文部分」だけを抜いて差し替えます。</div>
-                          </CardContent>
-                        </Card>
-                      )}
                     </div>
 
-                    <div>
-                      <Label className="text-sm font-semibold text-slate-700">署名</Label>
+                    {/* 署名（入力＋保存＋▼、候補内🗑削除） */}
+                    <div className="relative">
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">署名</label>
 
-                      <Textarea
-                        className="mt-2 min-h-[110px] rounded-lg bg-white"
+                      <textarea
+                        className="w-full min-h-[110px] rounded-lg border p-4 resize-none bg-white"
                         placeholder={"例）\n○○大学 ○○学科\n学籍番号：xxxx\n氏名：…"}
                         value={signatureInput}
                         onChange={(e) => setSignatureInput(e.target.value)}
@@ -914,154 +1031,167 @@ export default function MailConfirmPage() {
                       />
 
                       <div className="mt-3 flex gap-2">
-                        <Button className={`h-11 rounded-xl px-4 ${amberBtn}`} disabled={busy || !signatureInput.trim()} type="button" onClick={saveSignature}>
+                        <button
+                          className="h-11 px-4 rounded-xl bg-amber-100 text-slate-800 font-semibold hover:bg-amber-200 transition disabled:opacity-60"
+                          disabled={busy || !signatureInput.trim()}
+                          type="button"
+                          onClick={saveSignature}
+                        >
                           保存
-                        </Button>
-
-                        <Popover open={openSig} onOpenChange={setOpenSig}>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" className="h-11 w-11 rounded-xl px-0" type="button" aria-label="署名候補を開く">
-                              {openSig ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="z-50 p-0 rounded-xl w-72 max-w-[calc(100vw-24px)]" align="end" sideOffset={8} collisionPadding={12}>
-                            <ScrollArea className="max-h-56">
-                              {signatures.length === 0 ? (
-                                <div className="p-3 text-sm text-slate-500">候補がありません</div>
-                              ) : (
-                                signatures.map((s, idx) => (
-                                  <div key={s.id}>
-                                    <div className="flex items-stretch">
-                                      <Button
-                                        variant="ghost"
-                                        className="flex-1 h-auto justify-start rounded-none px-4 py-3 text-left"
-                                        type="button"
-                                        onClick={() => {
-                                          setSignatureInput(s.content);
-                                          setOpenSig(false);
-                                        }}
-                                      >
-                                        <div className="w-full">
-                                          <div className="text-xs text-slate-500 mb-1">署名 {s.id}</div>
-                                          <div className="whitespace-pre-wrap text-slate-900">{s.content}</div>
-                                        </div>
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        className="w-12 rounded-none text-red-500 hover:bg-red-50"
-                                        type="button"
-                                        aria-label="署名を削除"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          deleteSignatureById(s.id);
-                                        }}
-                                      >
-                                        <Trash2 size={18} />
-                                      </Button>
-                                    </div>
-                                    {idx !== signatures.length - 1 && <Separator />}
-                                  </div>
-                                ))
-                              )}
-                            </ScrollArea>
-                          </PopoverContent>
-                        </Popover>
+                        </button>
+                        <button
+                          className="h-11 w-11 rounded-xl border bg-white hover:bg-slate-50 flex items-center justify-center"
+                          onClick={() => setOpenSig((v) => !v)}
+                          type="button"
+                          aria-label="署名候補を開く"
+                        >
+                          {openSig ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                        </button>
                       </div>
-                    </div>
 
-                    <div>
-                      <Button className={`h-11 rounded-xl px-4 ${amberBtn}`} type="button" onClick={() => setShowTemplateArea((v) => !v)}>
-                        {showTemplateArea ? "テンプレを閉じる" : "テンプレを使う"}
-                      </Button>
-
-                      {showTemplateArea && (
-                        <Card className="mt-3 rounded-2xl">
-                          <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between gap-3">
-                              <CardTitle className="text-base">テンプレ（宛先ごと）</CardTitle>
-                              <div className="text-xs text-slate-500">※ 候補クリックで本文へ反映 / 保存したら即適用</div>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="pt-0">
-                            <Textarea
-                              className="min-h-[110px] rounded-lg bg-white"
-                              value={templateInput}
-                              onChange={(e) => setTemplateInput(e.target.value)}
-                              onFocus={() => setOpenTpl(false)}
-                            />
-
-                            <div className="mt-3 flex gap-2 relative">
-                              <Button className={`h-11 rounded-xl px-4 ${amberBtn}`} disabled={busy || !templateInput.trim()} type="button" onClick={saveTemplate}>
-                                保存
-                              </Button>
-
-                              <Popover open={openTpl} onOpenChange={setOpenTpl}>
-                                <PopoverTrigger asChild>
-                                  <Button variant="outline" className="h-11 w-11 rounded-xl px-0" type="button" aria-label="テンプレ候補を開く">
-                                    {openTpl ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="z-50 p-0 rounded-xl w-72 max-w-[calc(100vw-24px)]" align="end" sideOffset={8} collisionPadding={12}>
-                                  <ScrollArea className="max-h-56">
-                                    {templates.length === 0 ? (
-                                      <div className="p-3 text-sm text-slate-500">候補がありません</div>
-                                    ) : (
-                                      templates.map((t, idx) => (
-                                        <div key={t.id}>
-                                          <div className="flex items-stretch">
-                                            <Button variant="ghost" className="flex-1 h-auto justify-start rounded-none px-4 py-3 text-left" type="button" onClick={() => handleApplyTemplate(t)}>
-                                              <div className="w-full">
-                                                <div className="text-xs text-slate-500 mb-1">テンプレ {t.id}</div>
-                                                <div className="whitespace-pre-wrap text-slate-900 line-clamp-4">{t.content}</div>
-                                              </div>
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              className="w-12 rounded-none text-red-500 hover:bg-red-50"
-                                              type="button"
-                                              aria-label="テンプレを削除"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                deleteTemplateById(t.id);
-                                              }}
-                                            >
-                                              <Trash2 size={18} />
-                                            </Button>
-                                          </div>
-                                          {idx !== templates.length - 1 && <Separator />}
-                                        </div>
-                                      ))
-                                    )}
-                                  </ScrollArea>
-                                </PopoverContent>
-                              </Popover>
-                            </div>
-
-                            <div className="mt-2 text-xs text-slate-500">
-                              ルール：テンプレ内に {TEMPLATE_MARKER} を<strong>1つだけ</strong>入れてください（保存時に検証します）。
-                            </div>
-                          </CardContent>
-                        </Card>
+                      {openSig && (
+                        <div className="absolute z-20 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
+                          <div className="max-h-56 overflow-auto">
+                            {signatures.length === 0 ? (
+                              <div className="p-3 text-sm text-slate-500">候補がありません</div>
+                            ) : (
+                              signatures.map((s) => (
+                                <div key={s.id} className="flex items-stretch border-b last:border-b-0">
+                                  <button
+                                    className="flex-1 text-left px-4 py-3 hover:bg-slate-50 text-sm"
+                                    onClick={() => {
+                                      setSignatureInput(s.content);
+                                      setOpenSig(false);
+                                    }}
+                                    type="button"
+                                  >
+                                    <div className="text-xs text-slate-500 mb-1">署名 {s.id}</div>
+                                    <div className="whitespace-pre-wrap text-slate-800">{s.content}</div>
+                                  </button>
+                                  <button
+                                    className="w-12 flex items-center justify-center hover:bg-red-50 text-red-500"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deleteSignatureById(s.id);
+                                    }}
+                                    type="button"
+                                    aria-label="署名を削除"
+                                  >
+                                    <Trash2 size={18} />
+                                  </button>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
                       )}
                     </div>
 
-                    <Button
-                      className={`w-full h-12 rounded-xl font-semibold flex items-center justify-center gap-2 ${amberBtn}`}
-                      type="button"
+                    {/* テンプレ（任意） */}
+                    <div className="mt-2">
+                      <button
+                        className="h-11 px-4 rounded-xl bg-amber-100 text-slate-800 font-semibold hover:bg-amber-200 transition"
+                        type="button"
+                        onClick={() => setShowTemplateArea((v) => !v)}
+                      >
+                        {showTemplateArea ? "テンプレを閉じる" : "テンプレを使う"}
+                      </button>
+
+                      {showTemplateArea && (
+                        <div className="mt-3 rounded-2xl border bg-white p-5">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-semibold text-slate-800">テンプレ</div>
+                            <div className="text-xs text-slate-500">
+                            </div>
+                          </div>
+
+                          <textarea
+                            className="mt-3 w-full min-h-[110px] rounded-lg border p-4 resize-none bg-white"
+                            value={templateInput}
+                            onChange={(e) => setTemplateInput(e.target.value)}
+                            onFocus={() => setOpenTpl(false)}
+                          />
+
+                          <div className="mt-3 flex gap-2 relative">
+                            <button
+                              className="h-11 px-4 rounded-xl bg-amber-100 text-slate-800 font-semibold hover:bg-amber-200 transition disabled:opacity-60"
+                              disabled={busy || !templateInput.trim()}
+                              type="button"
+                              onClick={saveTemplate}
+                            >
+                              保存
+                            </button>
+
+                            <button
+                              className="h-11 w-11 rounded-xl border bg-white hover:bg-slate-50 flex items-center justify-center"
+                              onClick={() => setOpenTpl((v) => !v)}
+                              type="button"
+                              aria-label="テンプレ候補を開く"
+                            >
+                              {openTpl ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                            </button>
+
+                            {openTpl && (
+                              <div className="absolute z-20 mt-12 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
+                                <div className="max-h-56 overflow-auto">
+                                  {templates.length === 0 ? (
+                                    <div className="p-3 text-sm text-slate-500">候補がありません</div>
+                                  ) : (
+                                    templates.map((t) => (
+                                      <div key={t.id} className="flex items-stretch border-b last:border-b-0">
+                                        <button
+                                          className="flex-1 text-left px-4 py-3 hover:bg-slate-50 text-sm"
+                                          onClick={() => handleApplyTemplate(t)}
+                                          type="button"
+                                        >
+                                          <div className="text-xs text-slate-500 mb-1">テンプレ {t.id}</div>
+                                          <div className="whitespace-pre-wrap text-slate-800 line-clamp-4">
+                                            {t.content}
+                                          </div>
+                                        </button>
+                                        <button
+                                          className="w-12 flex items-center justify-center hover:bg-red-50 text-red-500"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteTemplateById(t.id);
+                                          }}
+                                          type="button"
+                                          aria-label="テンプレを削除"
+                                        >
+                                          <Trash2 size={18} />
+                                        </button>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="mt-2 text-xs text-slate-500">
+                          {TEMPLATE_MARKER}が本文が入る位置となります
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
                       onClick={handleSendAndSave}
                       disabled={busy}
+                      className="w-full h-12 rounded-xl bg-amber-100 text-slate-800 font-semibold hover:bg-amber-200 transition flex items-center justify-center gap-2 disabled:opacity-60"
+                      type="button"
                     >
                       <Send size={18} />
                       Send message
-                    </Button>
+                    </button>
 
                     <div className="text-xs text-slate-500">
                       ※ 宛先/送信元が未保存の場合は送信できません（先に「保存」を押してください）
                     </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
             <div className="h-16" />
           </div>
