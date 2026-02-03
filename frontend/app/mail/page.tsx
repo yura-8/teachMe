@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Send, ChevronDown, ChevronUp, Trash2, X } from "lucide-react";
+import styles from "./mail.module.css";
 
+// --- Types ---
 type Recipient = {
   id: number;
   user_id: number;
@@ -47,6 +49,7 @@ type SentMail = {
 const API_BASE = "http://localhost:8080";
 const TEMPLATE_MARKER = "{{BODY}}";
 
+// --- Helpers ---
 const isProbablyEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 
 function countExactMarker(s: string) {
@@ -58,10 +61,8 @@ function countMarkerPrefix(s: string) {
 function validateTemplateOrThrow(content: string) {
   const c = content.trim();
   if (!c) throw new Error("テンプレが空です");
-
   const exact = countExactMarker(c);
   const prefix = countMarkerPrefix(c);
-
   if (prefix !== exact) {
     throw new Error("不正なプレースホルダがあります。{{BODY}} を正しい形で1つだけ入れてください。");
   }
@@ -81,7 +82,6 @@ function splitTemplate(tpl: string) {
 function extractRawFromTemplatedBody(currentBody: string, activeTpl: string | null) {
   if (!activeTpl) return currentBody;
   if (!activeTpl.includes(TEMPLATE_MARKER)) return currentBody;
-
   const { pre, post } = splitTemplate(activeTpl);
   if (currentBody.startsWith(pre) && currentBody.endsWith(post)) {
     return currentBody.slice(pre.length, currentBody.length - post.length);
@@ -96,8 +96,24 @@ function applyTemplate(tpl: string, raw: string) {
 }
 
 export default function MailConfirmPage() {
-  // ★ 開発用: ユーザーID切り替え機能
-  const [debugUserId, setDebugUserId] = useState(1);
+  // Provider不要の方法でユーザーEmailを管理
+  const [userEmail, setUserEmail] = useState("");
+
+  // コンポーネント起動時にAPIからセッション情報を取得
+  useEffect(() => {
+    const fetchSession = async () => {
+      try {
+        const res = await fetch("/api/auth/session");
+        const data = await res.json();
+        if (data?.user?.email) {
+          setUserEmail(data.user.email);
+        }
+      } catch (e) {
+        console.error("Session fetch failed", e);
+      }
+    };
+    fetchSession();
+  }, []);
 
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [myEmails, setMyEmails] = useState<MyEmail[]>([]);
@@ -108,23 +124,23 @@ export default function MailConfirmPage() {
   const [fromEmailInput, setFromEmailInput] = useState("");
   const [signatureInput, setSignatureInput] = useState("");
 
-  // 本文（テンプレ適用時はこのテキストエリアが実際に置換される）
   const [body, setBody] = useState("ここに生成された文章が入ります。適宜手直ししてください。");
   const [subject, setSubject] = useState("");
 
-  // dropdown open states
+  // UI Toggles
   const [openTo, setOpenTo] = useState(false);
   const [openFrom, setOpenFrom] = useState(false);
   const [openSig, setOpenSig] = useState(false);
-
-  // new recipient meta (only when registering a new email)
   const [showRecipientMeta, setShowRecipientMeta] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showTemplateArea, setShowTemplateArea] = useState(false);
+  const [openTpl, setOpenTpl] = useState(false);
+
+  // New Recipient Inputs
   const [pendingToEmail, setPendingToEmail] = useState("");
   const [pendingToName, setPendingToName] = useState("");
-  const [pendingToAvatar, setPendingToAvatar] = useState("");
 
-  // history
-  const [showHistory, setShowHistory] = useState(false);
+  // History State
   const [history, setHistory] = useState<SentMail[]>([]);
   const [historyScope, setHistoryScope] = useState<"selected" | "all">("selected");
   const [historySort, setHistorySort] = useState<"desc" | "asc">("desc");
@@ -133,51 +149,48 @@ export default function MailConfirmPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
-  // templates (optional)
-  const [showTemplateArea, setShowTemplateArea] = useState(false);
+  // Template State
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templateInput, setTemplateInput] = useState(
     `お世話になっております。\n\n${TEMPLATE_MARKER}\n\n何卒よろしくお願いいたします。`
   );
-  const [openTpl, setOpenTpl] = useState(false);
-
-  // active template
   const [activeTemplateId, setActiveTemplateId] = useState<number | null>(null);
   const [activeTemplateContent, setActiveTemplateContent] = useState<string | null>(null);
 
+  // Derived Values
   const selectedRecipient = useMemo(() => {
     const email = toEmailInput.trim().toLowerCase();
     return recipients.find((r) => r.email.trim().toLowerCase() === email);
   }, [recipients, toEmailInput]);
+
+  const avatarUrl = selectedRecipient?.avatar_url || "https://api.dicebear.com/7.x/pixel-art/svg?seed=Teacher";
   
+  const selectedRecipientName = useMemo(() => {
+    if (selectedRecipient?.name?.trim()) return selectedRecipient.name;
+    if (toEmailInput.trim()) return "（新しい宛先）";
+    return "宛先を入力してください";
+  }, [selectedRecipient, toEmailInput]);
 
-  const avatarUrl =
-    selectedRecipient?.avatar_url || "https://api.dicebear.com/7.x/pixel-art/svg?seed=Teacher";
-
-  const selectedRecipientName = selectedRecipient?.name?.trim() || "（未保存の宛先）";
-
-  // ★ API Fetch Wrapper: debugUserId をヘッダーに付与
   const apiFetch = async (path: string, options: RequestInit = {}) => {
     const headers = new Headers(options.headers);
-    headers.set("X-User-ID", String(debugUserId));
+    if (userEmail) {
+      headers.set("X-User-Email", userEmail);
+    }
     if (!headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
     }
-
-    // path は '/emails' 等で渡す想定
-    return fetch(`${API_BASE}${path}`, {
-      ...options,
-      headers,
-    });
+    return fetch(`${API_BASE}${path}`, { ...options, headers });
   };
 
   const refetchAll = async () => {
-    // ユーザー切り替え時にリセット
+    // ログインしていなければ何もしない
+    if (!userEmail) return;
+
     setRecipients([]);
     setMyEmails([]);
     setSignatures([]);
     setToEmailInput("");
-    setFromEmailInput("");
+    setFromEmailInput(userEmail);
     setSignatureInput("");
     setHistory([]);
 
@@ -192,1048 +205,512 @@ export default function MailConfirmPage() {
       const myEmailsData = (await myEmailsRes.json()) as MyEmail[];
       const sigsData = (await sigsRes.json()) as Signature[];
 
+      let finalMyEmails = Array.isArray(myEmailsData) ? myEmailsData : [];
+
+      if (userEmail) {
+        const alreadyExists = finalMyEmails.some(
+          (m) => m.email.trim().toLowerCase() === userEmail.trim().toLowerCase()
+        );
+        if (!alreadyExists) {
+          try {
+            // 保存APIを叩く
+            const saveRes = await apiFetch(`/my-emails`, { 
+              method: "POST", 
+              body: JSON.stringify({ email: userEmail }) 
+            });
+            if (saveRes.ok) {
+              const savedMyEmail = await saveRes.json();
+              finalMyEmails.push(savedMyEmail); // リストに追加して送信時にエラーにならないようにする
+              console.log("Logged-in email auto-saved:", savedMyEmail);
+            }
+          } catch(e) {
+            console.error("Auto-save failed", e);
+          }
+        }
+      }
+
       setRecipients(Array.isArray(emailsData) ? emailsData : []);
-      setMyEmails(Array.isArray(myEmailsData) ? myEmailsData : []);
+      setMyEmails(finalMyEmails); // 保存済みのデータを含めてセット
       setSignatures(Array.isArray(sigsData) ? sigsData : []);
 
       if (Array.isArray(emailsData) && emailsData.length > 0) setToEmailInput(emailsData[0].email);
-      if (Array.isArray(myEmailsData) && myEmailsData.length > 0) setFromEmailInput(myEmailsData[0].email);
+      // userEmail があるので、setFromEmailInput(userEmail) が優先される
+      
       if (Array.isArray(sigsData) && sigsData.length > 0) setSignatureInput(sigsData[0].content);
     } catch (e) {
       console.error(e);
     }
   };
 
-  // debugUserId が変わるたびに再取得
+  // userEmail が取得できたらデータを読み込む
   useEffect(() => {
-    refetchAll().catch((e) => console.error(e));
+    if (userEmail) {
+      refetchAll().catch((e) => console.error(e));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debugUserId]);
+  }, [userEmail]);
 
-  // ----------------------------
-  // Save / Delete: Recipients
-  // ----------------------------
+  // --- Actions ---
 
   const saveRecipient = async () => {
     const email = toEmailInput.trim();
-    if (!isProbablyEmail(email)) {
-      alert("宛先のメール形式を確認してください");
-      return;
-    }
-
+    if (!isProbablyEmail(email)) { alert("宛先のメール形式を確認してください"); return; }
     const exists = recipients.some((r) => r.email.trim().toLowerCase() === email.toLowerCase());
-    if (exists) {
-      alert("この宛先は既に登録されています");
-      return;
-    }
-
+    if (exists) { alert("この宛先は既に登録されています"); return; }
+    
+    // 新規登録の準備
     setPendingToEmail(email);
     setPendingToName("");
-    setPendingToAvatar("");
     setShowRecipientMeta(true);
     setOpenTo(false);
   };
 
   const confirmSaveRecipient = async () => {
     const email = pendingToEmail.trim();
-    if (!isProbablyEmail(email)) {
-      alert("宛先のメール形式を確認してください");
-      return;
-    }
-
+    if (!isProbablyEmail(email)) { alert("宛先のメール形式を確認してください"); return; }
     const exists = recipients.some((r) => r.email.trim().toLowerCase() === email.toLowerCase());
-    if (exists) {
-      alert("この宛先は既に登録されています");
-      setShowRecipientMeta(false);
-      return;
-    }
+    if (exists) { alert("この宛先は既に登録されています"); setShowRecipientMeta(false); return; }
 
-    const payload = {
-      user_id: debugUserId, // ★ debugUserId を使用
-      email,
-      name: pendingToName.trim(),
-      avatar_url: pendingToAvatar.trim(),
+    const autoAvatarUrl = `https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(email)}`;
+
+    const payload = { 
+      // user_id はバックエンドが X-User-Email から自動判定するので不要
+      email, 
+      name: pendingToName.trim(), 
+      avatar_url: autoAvatarUrl
     };
 
     try {
       setBusy(true);
-      const res = await apiFetch(`/emails`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const j = await res.json().catch(() => null);
-        alert(j?.error || "宛先の保存に失敗しました");
-        return;
-      }
-
+      const res = await apiFetch(`/emails`, { method: "POST", body: JSON.stringify(payload) });
+      if (!res.ok) { const j = await res.json().catch(() => null); alert(j?.error || "失敗しました"); return; }
       setShowRecipientMeta(false);
       setToEmailInput(email);
       await refetchAll();
-    } catch (e) {
-      console.error(e);
-      alert("宛先の保存に失敗しました");
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { console.error(e); alert("保存に失敗しました"); } finally { setBusy(false); }
   };
 
   const saveMyEmail = async () => {
     const email = fromEmailInput.trim();
-    if (!isProbablyEmail(email)) {
-      alert("送信元のメール形式を確認してください");
-      return;
-    }
-
+    if (!isProbablyEmail(email)) { alert("メール形式を確認してください"); return; }
     const exists = myEmails.some((m) => m.email.trim().toLowerCase() === email.toLowerCase());
-    if (exists) {
-      alert("この送信元は既に登録されています");
-      return;
-    }
-
-    const payload = { user_id: debugUserId, email }; // ★ debugUserId
+    if (exists) { alert("既に登録されています"); return; }
 
     try {
       setBusy(true);
-      const res = await apiFetch(`/my-emails`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-
-      if (res.status === 409) {
-        alert("この送信元は既に登録されています");
-        return;
-      }
-
-      if (!res.ok) {
-        const j = await res.json().catch(() => null);
-        alert(j?.error || "送信元の保存に失敗しました");
-        return;
-      }
-
+      const res = await apiFetch(`/my-emails`, { method: "POST", body: JSON.stringify({ email }) });
+      if (!res.ok) { const j = await res.json().catch(() => null); alert(j?.error || "失敗しました"); return; }
       await refetchAll();
-    } catch (e) {
-      console.error(e);
-      alert("送信元の保存に失敗しました");
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { console.error(e); alert("保存に失敗しました"); } finally { setBusy(false); }
   };
 
   const saveSignature = async () => {
     const content = signatureInput.trim();
-    if (!content) {
-      alert("署名が空です");
-      return;
-    }
-
+    if (!content) { alert("署名が空です"); return; }
     const exists = signatures.some((s) => s.content.trim() === content);
-    if (exists) {
-      alert("同じ署名が既に登録されています");
-      return;
-    }
-
-    const payload = { user_id: debugUserId, content }; // ★ debugUserId
+    if (exists) { alert("既に登録されています"); return; }
 
     try {
       setBusy(true);
-      const res = await apiFetch(`/signatures`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-
-      if (res.status === 409) {
-        alert("同じ署名が既に登録されています");
-        return;
-      }
-
-      if (!res.ok) {
-        const j = await res.json().catch(() => null);
-        alert(j?.error || "署名の保存に失敗しました");
-        return;
-      }
-
+      const res = await apiFetch(`/signatures`, { method: "POST", body: JSON.stringify({ content }) });
+      if (!res.ok) { const j = await res.json().catch(() => null); alert(j?.error || "失敗しました"); return; }
       await refetchAll();
-    } catch (e) {
-      console.error(e);
-      alert("署名の保存に失敗しました");
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { console.error(e); alert("保存に失敗しました"); } finally { setBusy(false); }
   };
 
-  // ----------------------------
-  // Templates
-  // ----------------------------
-
-  const fetchTemplates = async () => {
-    const toEmail = toEmailInput.trim().toLowerCase();
-    const fromEmail = fromEmailInput.trim().toLowerCase();
-    const recipient = recipients.find((r) => r.email.trim().toLowerCase() === toEmail);
-    const my = myEmails.find((m) => m.email.trim().toLowerCase() === fromEmail);
-
-    if (!recipient || !my) {
-      setTemplates([]);
-      return;
-    }
-
+  const deleteItem = async (type: 'emails' | 'my-emails' | 'signatures', id: number) => {
     try {
-      const res = await apiFetch(
-        `/templates?email_list_id=${recipient.id}&my_email_list_id=${my.id}`
-      );
-      if (!res.ok) return;
-      const data: Template[] = await res.json();
-      setTemplates(data);
-    } catch {
-      // ignore
-    }
+      setBusy(true);
+      const res = await apiFetch(`/${type}/${id}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) { const j = await res.json().catch(() => null); alert(j?.error || "削除失敗"); return; }
+      await refetchAll();
+    } catch (e) { console.error(e); alert("削除失敗"); } finally { setBusy(false); }
   };
 
-  useEffect(() => {
-    if (!showTemplateArea) return;
-    fetchTemplates();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showTemplateArea, toEmailInput, fromEmailInput, recipients, myEmails, debugUserId]);
+  // --- Templates ---
+  const fetchTemplates = async () => {
+    const recipient = recipients.find((r) => r.email.trim().toLowerCase() === toEmailInput.trim().toLowerCase());
+    const my = myEmails.find((m) => m.email.trim().toLowerCase() === fromEmailInput.trim().toLowerCase());
+    if (!recipient || !my) { setTemplates([]); return; }
+    try {
+      const res = await apiFetch(`/templates?email_list_id=${recipient.id}&my_email_list_id=${my.id}`);
+      if (!res.ok) return;
+      setTemplates(await res.json());
+    } catch {}
+  };
+
+  useEffect(() => { if (showTemplateArea) fetchTemplates(); }, [showTemplateArea, toEmailInput, fromEmailInput, recipients, myEmails, userEmail]);
 
   const handleApplyTemplate = (tpl: Template) => {
+    try { validateTemplateOrThrow(tpl.content); } catch (e: any) { alert(e.message); return; }
     const raw = extractRawFromTemplatedBody(body, activeTemplateContent);
-
-    try {
-      validateTemplateOrThrow(tpl.content);
-    } catch (e: any) {
-      alert(e.message || "テンプレが不正です");
-      return;
-    }
-
     setBody(applyTemplate(tpl.content, raw));
     setActiveTemplateId(tpl.id);
     setActiveTemplateContent(tpl.content);
     setOpenTpl(false);
   };
 
-  const clearTemplate = () => {
-    const raw = extractRawFromTemplatedBody(body, activeTemplateContent);
-    setBody(raw);
-    setActiveTemplateId(null);
-    setActiveTemplateContent(null);
-  };
-
   const saveTemplate = async () => {
-    const content = templateInput.trim();
-
-    try {
-      validateTemplateOrThrow(content);
-    } catch (e: any) {
-      alert(e.message || "テンプレが不正です");
-      return;
-    }
-
-    const toEmail = toEmailInput.trim().toLowerCase();
-    const fromEmail = fromEmailInput.trim().toLowerCase();
-    const recipient = recipients.find((r) => r.email.trim().toLowerCase() === toEmail);
-    const my = myEmails.find((m) => m.email.trim().toLowerCase() === fromEmail);
-
-    if (!recipient || !my) {
-      alert("テンプレは「保存済みの宛先/送信元」を選んだ状態で登録してください");
-      return;
-    }
-
-    const payload = {
-      content,
-      email_list_id: recipient.id,
-      my_email_list_id: my.id,
-      user_id: debugUserId, // ★ debugUserId
-    };
+    try { validateTemplateOrThrow(templateInput.trim()); } catch (e: any) { alert(e.message); return; }
+    const recipient = recipients.find((r) => r.email.trim().toLowerCase() === toEmailInput.trim().toLowerCase());
+    const my = myEmails.find((m) => m.email.trim().toLowerCase() === fromEmailInput.trim().toLowerCase());
+    if (!recipient || !my) { alert("宛先と送信元を選んでください"); return; }
 
     try {
       setBusy(true);
       const res = await apiFetch(`/templates`, {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ content: templateInput.trim(), email_list_id: recipient.id, my_email_list_id: my.id })
       });
-
-      if (res.status === 409) {
-        alert("同じテンプレが既に登録されています");
-        return;
-      }
-
-      if (!res.ok) {
-        const j = await res.json().catch(() => null);
-        alert(j?.error || "テンプレの保存に失敗しました");
-        return;
-      }
-
-      const created: Template | null = await res.json().catch(() => null);
-      const tplContent = created?.content ?? content;
-
-      // 保存したらそのまま即適用
+      if (!res.ok) { const j = await res.json().catch(() => null); alert(j?.error || "保存失敗"); return; }
+      
+      const created: Template = await res.json();
       const raw = extractRawFromTemplatedBody(body, activeTemplateContent);
-      setBody(applyTemplate(tplContent, raw));
-      setActiveTemplateId(created?.id ?? null);
-      setActiveTemplateContent(tplContent);
-
-      setTemplateInput(
-        `お世話になっております。\n\n${TEMPLATE_MARKER}\n\n何卒よろしくお願いいたします。`
-      );
+      setBody(applyTemplate(created.content, raw));
+      setActiveTemplateId(created.id);
+      setActiveTemplateContent(created.content);
       setOpenTpl(false);
       await fetchTemplates();
-      alert("テンプレを保存し、本文に適用しました");
-    } catch (e) {
-      console.error(e);
-      alert("テンプレの保存に失敗しました");
-    } finally {
-      setBusy(false);
-    }
+      alert("テンプレを保存し適用しました");
+    } catch (e) { console.error(e); alert("保存失敗"); } finally { setBusy(false); }
   };
 
-  const deleteTemplateById = async (id: number) => {
+  const deleteTemplate = async (id: number) => {
     try {
       setBusy(true);
       const res = await apiFetch(`/templates/${id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 204) {
-        const j = await res.json().catch(() => null);
-        alert(j?.error || "削除に失敗しました");
-        return;
-      }
-
+      if (!res.ok && res.status !== 204) { const j = await res.json().catch(() => null); alert(j?.error || "削除失敗"); return; }
       if (activeTemplateId === id) {
-        clearTemplate();
+        setBody(extractRawFromTemplatedBody(body, activeTemplateContent));
+        setActiveTemplateId(null);
+        setActiveTemplateContent(null);
       }
-
       await fetchTemplates();
-    } catch (e) {
-      console.error(e);
-      alert("削除に失敗しました");
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { console.error(e); alert("削除失敗"); } finally { setBusy(false); }
   };
 
-  // ----------------------------
-  // Deletes: Recipient/MyEmail/Signature
-  // ----------------------------
-
-  const deleteRecipientById = async (id: number) => {
-    try {
-      setBusy(true);
-      const res = await apiFetch(`/emails/${id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 204) {
-        const j = await res.json().catch(() => null);
-        alert(j?.error || "削除に失敗しました");
-        return;
-      }
-      await refetchAll();
-    } catch (e) {
-      console.error(e);
-      alert("削除に失敗しました");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const deleteMyEmailById = async (id: number) => {
-    try {
-      setBusy(true);
-      const res = await apiFetch(`/my-emails/${id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 204) {
-        const j = await res.json().catch(() => null);
-        alert(j?.error || "削除に失敗しました");
-        return;
-      }
-      await refetchAll();
-    } catch (e) {
-      console.error(e);
-      alert("削除に失敗しました");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const deleteSignatureById = async (id: number) => {
-    try {
-      setBusy(true);
-      const res = await apiFetch(`/signatures/${id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 204) {
-        const j = await res.json().catch(() => null);
-        alert(j?.error || "削除に失敗しました");
-        return;
-      }
-      await refetchAll();
-    } catch (e) {
-      console.error(e);
-      alert("削除に失敗しました");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // ----------------------------
-  // Send (save history)
-  // ----------------------------
-
+  // --- Send & History ---
   const handleSendAndSave = async () => {
     const toEmail = toEmailInput.trim().toLowerCase();
     const fromEmail = fromEmailInput.trim().toLowerCase();
-
-    if (!isProbablyEmail(toEmail) || !isProbablyEmail(fromEmail)) {
-      alert("宛先/送信元のメール形式を確認してください");
-      return;
-    }
+    if (!isProbablyEmail(toEmail) || !isProbablyEmail(fromEmail)) { alert("メール形式を確認してください"); return; }
 
     const recipient = recipients.find((r) => r.email.trim().toLowerCase() === toEmail);
     const my = myEmails.find((m) => m.email.trim().toLowerCase() === fromEmail);
+    if (!recipient || !my) { alert("宛先または送信元を「保存」してください"); return; }
 
-    if (!recipient) {
-      alert("宛先が未保存です。先に「保存」を押してください。");
-      return;
-    }
-    if (!my) {
-      alert("送信元が未保存です。先に「保存」を押してください。");
-      return;
-    }
-    
-    const fullMessage = `${body}\n\n${signatureInput}`;
-
-    const payload = {
-      content: `件名：${subject}\n\n${fullMessage}`,
-      email_list_id: recipient.id,
-      my_email_list_id: my.id,
-      user_id: debugUserId, // ★ debugUserId
-    };
+    const fullMessage = signatureInput.trim() ? `${body}\n\n${signatureInput}` : body;
 
     try {
       setBusy(true);
-      const response = await apiFetch(`/sent`, {
+      const res = await apiFetch(`/sent`, {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          content: `件名：${subject}\n\n${fullMessage}`,
+          email_list_id: recipient.id,
+          my_email_list_id: my.id
+        })
       });
 
-      if (response.ok) {
+      if (res.ok) {
         alert("送信履歴を記録しました！");
         if (showHistory) await fetchHistory();
       } else {
-        const j = await response.json().catch(() => null);
-        alert(j?.error || "履歴の保存に失敗しました");
+        const j = await res.json().catch(() => null);
+        alert(j?.error || "履歴保存に失敗しました");
       }
-    } catch (error) {
-      console.error("送信エラー:", error);
-      alert("送信エラーが発生しました");
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { console.error(e); alert("送信エラー"); } finally { setBusy(false); }
   };
-
-  // ----------------------------
-  // History fetch
-  // ----------------------------
 
   const fetchHistory = async () => {
     setHistoryLoading(true);
     setHistoryError(null);
-
     try {
-      const toEmail = toEmailInput.trim().toLowerCase();
-      const fromEmail = fromEmailInput.trim().toLowerCase();
-
-      const recipient = recipients.find(
-        (r) => r.email?.trim().toLowerCase() === toEmail
-      );
-      const my = myEmails.find(
-        (m) => m.email?.trim().toLowerCase() === fromEmail
-      );
-
-      const params = new URLSearchParams();
-      params.set("sort", historySort);
-      params.set("limit", String(historyLimit));
+      const recipient = recipients.find((r) => r.email?.trim().toLowerCase() === toEmailInput.trim().toLowerCase());
+      const my = myEmails.find((m) => m.email?.trim().toLowerCase() === fromEmailInput.trim().toLowerCase());
+      const params = new URLSearchParams({ sort: historySort, limit: String(historyLimit) });
       if (historyQuery.trim()) params.set("q", historyQuery.trim());
-
       if (historyScope === "selected") {
         if (recipient) params.set("email_list_id", String(recipient.id));
         if (my) params.set("my_email_list_id", String(my.id));
       }
-
-      // Query parameterはURLに含める
       const res = await apiFetch(`/sent?${params.toString()}`);
       if (!res.ok) {
         const j = await res.json().catch(() => null);
-        setHistoryError(j?.error || "履歴の取得に失敗しました");
-        setHistory([]);
-        return;
+        throw new Error(j?.error || `エラーが発生しました (Status: ${res.status})`);
       }
+      
+      const data = await res.json();
+      setHistory(Array.isArray(data) ? data : []);
 
-      const json = await res.json().catch(() => []);
-      setHistory(Array.isArray(json) ? json : []);
-    } catch (e) {
+    } catch (e: any) { 
       console.error(e);
-      setHistoryError("履歴の取得に失敗しました");
-      setHistory([]);
-    } finally {
-      setHistoryLoading(false);
+      setHistoryError(e.message || "履歴の取得に失敗しました"); 
+      setHistory([]); 
     }
+    finally { setHistoryLoading(false); }
   };
 
-
   useEffect(() => {
-    if (!showHistory) return;
-    fetchHistory();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    showHistory,
-    historyScope,
-    historySort,
-    historyLimit,
-    historyQuery,
-    toEmailInput,
-    fromEmailInput,
-    recipients,
-    myEmails,
-    debugUserId, // ユーザーID変更時も再取得
-  ]);
+    if (showHistory) fetchHistory();
+  }, [showHistory, historyScope, historySort, historyLimit, historyQuery, toEmailInput, fromEmailInput, recipients, myEmails, userEmail]);
 
+  // --- Render ---
   return (
-    <div className="min-h-screen bg-slate-100">
-      <div className="mx-auto max-w-6xl px-4 py-10">
+    <div className={styles.wrapper}>
+      <div className={styles.container}>
         
-        {/* ★ デバッグ用: ユーザーID切り替えエリア */}
-        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-4 shadow-sm">
-           <span className="font-bold text-sm text-yellow-800">開発用ユーザー切り替え:</span>
-           <div className="flex items-center gap-2">
-             <label className="text-sm font-semibold">User ID:</label>
-             <input 
-               type="number" 
-               className="border border-yellow-300 rounded px-2 py-1 w-20 text-center"
-               value={debugUserId}
-               onChange={(e) => setDebugUserId(Number(e.target.value))}
-               min={1}
-             />
-             <span className="text-xs text-slate-500 ml-2">
-             </span>
-           </div>
-        </div>
-
-        {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">メール</h1>
-          </div>
+        {/* Header Title (Grid full width) */}
+        <div className={styles.header}>
+          <div className={styles.title}>メール作成</div>
           <button
-            className="text-sm px-4 h-10 rounded-xl border bg-white hover:bg-slate-50"
-            type="button"
+            className={styles.actionBtn}
             onClick={() => setShowHistory((v) => !v)}
           >
             {showHistory ? "履歴を閉じる" : "履歴を見る"}
           </button>
         </div>
 
-        {/* Grid */}
-        <div className="grid grid-cols-12 gap-6">
-          {/* Left card */}
-          <div className="col-span-12 md:col-span-3">
-            <div className="bg-white border rounded-2xl shadow-sm p-6">
-              <div className="flex items-center gap-3">
-                <img src={avatarUrl} alt="avatar" className="h-12 w-12 rounded-2xl border bg-white" />
-                <div className="min-w-0">
-                  <div className="text-sm text-slate-500">宛先（教授）</div>
-                  <div className="font-bold text-slate-900 truncate">{selectedRecipientName}</div>
-                  <div className="text-xs text-slate-500 truncate">{selectedRecipient?.email}</div>
-                </div>
+        {/* Left Panel */}
+        <div className={styles.leftPanel}>
+          <div className={styles.card}>
+            <div className={styles.recipientInfo}>
+              <img src={avatarUrl} alt="avatar" className={styles.avatar} />
+              <div className={styles.infoText}>
+                <h3>{selectedRecipientName}</h3>
+                <p>{selectedRecipient?.email || toEmailInput || "未入力"}</p>
               </div>
             </div>
+          </div>
 
-            {/* History */}
-            {showHistory && (
-              <div className="mt-6 bg-white border rounded-2xl shadow-sm p-6">
-                <div className="flex items-center justify-between">
-                  <div className="font-bold text-slate-900">送信履歴</div>
-                  <button
-                    type="button"
-                    className="text-xs px-3 h-8 rounded-xl border bg-white hover:bg-slate-50"
-                    onClick={fetchHistory}
-                    disabled={historyLoading}
-                  >
-                    更新
-                  </button>
+          {showHistory && (
+            <div className={styles.card}>
+              <div className={styles.row} style={{ justifyContent: 'space-between' }}>
+                <span className={styles.label}>送信履歴</span>
+                <button onClick={fetchHistory} className={styles.actionBtn} style={{height: 32, padding: '0 12px', fontSize: 12}}>
+                  更新
+                </button>
+              </div>
+              
+              <div className={styles.row} style={{ marginTop: 12 }}>
+                <select className={styles.select} value={historyScope} onChange={(e: any) => setHistoryScope(e.target.value)}>
+                  <option value="selected">現在の宛先</option>
+                  <option value="all">全て</option>
+                </select>
+              </div>
+
+              <div className={styles.row} style={{ marginTop: 8 }}>
+                <input className={styles.input} placeholder="検索" value={historyQuery} onChange={(e) => setHistoryQuery(e.target.value)} />
+              </div>
+
+              {historyLoading && <div className={styles.textSmall} style={{marginTop:10}}>読み込み中...</div>}
+              {historyError && <div style={{color:'red', fontSize:12, marginTop:10}}>{historyError}</div>}
+              
+              <div className={styles.historyList}>
+                {history.map((m) => (
+                  <div key={m.id} className={styles.historyItem}>
+                    <div className={styles.historyDate}>{new Date(m.created_at).toLocaleString()}</div>
+                    <div style={{fontWeight:600}}>To: {m.to_email || "不明"}</div>
+                    <div style={{whiteSpace:'pre-wrap', marginTop:4, color:'#555'}}>{m.content.slice(0, 60)}...</div>
+                  </div>
+                ))}
+                {!historyLoading && history.length === 0 && <div className={styles.textSmall}>履歴なし</div>}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right Panel (Main Form) */}
+        <div className={styles.rightPanel}>
+          <div className={styles.card}>
+            <div className={styles.formGroup}>
+              <div className={styles.row}>
+                {/* 宛先入力 */}
+                <div className={styles.relative} style={{ flex: 1 }}>
+                  <label className={styles.label}>宛先 (To)</label>
+                  <div className={styles.row} style={{ marginTop: 6 }}>
+                    <input
+                      className={styles.input}
+                      placeholder="prof@univ.ac.jp"
+                      value={toEmailInput}
+                      onChange={(e) => setToEmailInput(e.target.value)}
+                      onFocus={() => { setOpenTo(false); setShowRecipientMeta(false); }}
+                    />
+                    <button className={styles.iconBtn} onClick={() => setOpenTo(!openTo)}>
+                      {openTo ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+                    </button>
+                    <button className={styles.actionBtn} onClick={saveRecipient} disabled={busy}>保存</button>
+                  </div>
+
+                  {openTo && (
+                    <div className={styles.dropdown}>
+                      {recipients.map(r => (
+                        <div key={r.id} className={styles.dropdownItem}>
+                          <div onClick={() => { setToEmailInput(r.email); setOpenTo(false); }}>
+                            <div style={{fontWeight:600}}>{r.email}</div>
+                            <div className={styles.textSmall}>{r.name}</div>
+                          </div>
+                          <button onClick={() => deleteItem('emails', r.id)}><Trash2 size={16} color="#d32f2f"/></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <div className="mt-4 space-y-3">
-                  <div className="flex gap-2">
-                    <select
-                      className="h-9 rounded-lg border px-2 bg-white text-sm w-full sm:w-auto min-w-0"
-                      value={historyScope}
-                      onChange={(e) => setHistoryScope(e.target.value as any)}
-                    >
-                      <option value="selected">この宛先/送信元</option>
-                      <option value="all">全て</option>
-                    </select>
-
-                    <select
-                      className="h-9 rounded-lg border px-2 bg-white text-sm w-full sm:w-auto min-w-0"
-                      value={historySort}
-                      onChange={(e) => setHistorySort(e.target.value as any)}
-                    >
-                      <option value="desc">新しい順</option>
-                      <option value="asc">古い順</option>
-                    </select>
-                  </div>
-
-                  <div className="flex gap-2">
+                {/* 送信元入力 */}
+                <div className={styles.relative} style={{ flex: 1 }}>
+                  <label className={styles.label}>送信元 (From)</label>
+                  <div className={styles.row} style={{ marginTop: 6 }}>
                     <input
-                      className="flex-1 h-9 rounded-lg border px-2 bg-white text-sm"
-                      placeholder="本文検索（部分一致）"
-                      value={historyQuery}
-                      onChange={(e) => setHistoryQuery(e.target.value)}
+                      className={styles.input}
+                      placeholder="me@example.com"
+                      value={fromEmailInput}
+                      onChange={(e) => setFromEmailInput(e.target.value)}
+                      onFocus={() => setOpenFrom(false)}
                     />
-                    <select
-                      className="h-9 rounded-lg border px-2 bg-white text-sm w-full sm:w-auto min-w-0"
-                      value={historyLimit}
-                      onChange={(e) => setHistoryLimit(Number(e.target.value))}
-                    >
-                      <option value={10}>10</option>
-                      <option value={25}>25</option>
-                      <option value={50}>50</option>
-                    </select>
+                    <button className={styles.iconBtn} onClick={() => setOpenFrom(!openFrom)}>
+                      {openFrom ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+                    </button>
+                    <button className={styles.actionBtn} onClick={saveMyEmail} disabled={busy}>保存</button>
                   </div>
-
-                  {historyError && <div className="text-xs text-red-600">{historyError}</div>}
-
-                  {historyLoading ? (
-                    <div className="text-sm text-slate-500">読み込み中…</div>
-                  ) : history.length === 0 ? (
-                    <div className="text-sm text-slate-500">履歴がありません</div>
-                  ) : (
-                    <div className="space-y-3">
-                      {history.map((m) => (
-                        <div key={m.id} className="rounded-xl border bg-slate-50 p-3">
-                          <div className="space-y-1">
-                            <div className="text-xs text-slate-500">
-                              {new Date(m.created_at).toLocaleString()}
-                            </div>
-
-                            <div className="text-xs text-slate-600">
-                              <div>
-                                To:{" "}
-                                <span className="font-mono">{m.to_email ?? `#${m.email_list_id}`}</span>
-                              </div>
-                              <div>
-                                From:{" "}
-                                <span className="font-mono">
-                                  {m.from_email ?? `#${m.my_email_list_id}`}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="font-mono whitespace-pre-wrap text-slate-800 text-xs">
-                              {m.content}
-                            </div>
+                  {openFrom && (
+                    <div className={styles.dropdown}>
+                      {myEmails.map(m => (
+                        <div key={m.id} className={styles.dropdownItem}>
+                          <div onClick={() => { setFromEmailInput(m.email); setOpenFrom(false); }}>
+                            {m.email}
                           </div>
+                          <button onClick={() => deleteItem('my-emails', m.id)}><Trash2 size={16} color="#d32f2f"/></button>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* Main card */}
-          <div className="col-span-12 md:col-span-9">
-            <div className="bg-white border rounded-2xl shadow-sm">
-              <div className="p-8">
-                {/* To / From */}
-                <div className="grid grid-cols-12 gap-6 items-end">
-                  {/* 宛先 */}
-                  <div className="col-span-12 md:col-span-6 relative">
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                      Email（宛先）
-                    </label>
-
-                    <div className="flex gap-2">
-                      <input
-                        className="flex-1 h-11 rounded-lg border px-3 bg-white"
-                        placeholder="prof@university.ac.jp"
-                        value={toEmailInput}
-                        onChange={(e) => setToEmailInput(e.target.value)}
-                        onFocus={() => {
-                          setOpenTo(false);
-                          setShowRecipientMeta(false);
-                        }}
-                      />
-                      <button
-                        className="h-11 px-4 rounded-xl bg-amber-100 text-slate-800 font-semibold hover:bg-amber-200 transition disabled:opacity-60"
-                        onClick={saveRecipient}
-                        disabled={busy}
-                        type="button"
-                      >
-                        保存
-                      </button>
-                      <button
-                        className="h-11 w-11 rounded-xl border bg-white hover:bg-slate-50 flex items-center justify-center"
-                        onClick={() => setOpenTo((v) => !v)}
-                        type="button"
-                        aria-label="宛先候補を開く"
-                      >
-                        {openTo ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                      </button>
-                    </div>
-
-                    {/* ★新規登録時だけ追加情報 */}
-                    {showRecipientMeta && (
-                      <div className="mt-4 rounded-2xl border bg-slate-50 p-5">
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="text-sm">
-                            <div className="font-semibold text-slate-800">新しい宛先を登録</div>
-                            <div className="text-slate-500 mt-1">
-                              Email: <span className="font-mono">{pendingToEmail}</span>
-                            </div>
-                          </div>
-                          <button
-                            className="h-9 w-9 rounded-xl border bg-white hover:bg-slate-50 flex items-center justify-center"
-                            onClick={() => setShowRecipientMeta(false)}
-                            type="button"
-                            aria-label="閉じる"
-                          >
-                            <X size={18} />
-                          </button>
-                        </div>
-
-                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <input
-                            className="h-10 rounded-lg border px-3 bg-white text-sm"
-                            placeholder="教授名（任意）"
-                            value={pendingToName}
-                            onChange={(e) => setPendingToName(e.target.value)}
-                          />
-                          <input
-                            className="h-10 rounded-lg border px-3 bg-white text-sm"
-                            placeholder="アイコンURL（任意）"
-                            value={pendingToAvatar}
-                            onChange={(e) => setPendingToAvatar(e.target.value)}
-                          />
-                        </div>
-
-                        <div className="mt-4">
-                          <button
-                            className="h-11 px-4 rounded-xl bg-amber-100 text-slate-800 font-semibold hover:bg-amber-200 transition"
-                            onClick={confirmSaveRecipient}
-                            disabled={busy}
-                            type="button"
-                          >
-                            登録する
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 宛先候補（候補内に削除🗑） */}
-                    {openTo && (
-                      <div className="absolute z-20 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
-                        <div className="max-h-56 overflow-auto">
-                          {recipients.length === 0 ? (
-                            <div className="p-3 text-sm text-slate-500">候補がありません</div>
-                          ) : (
-                            recipients.map((r) => (
-                              <div key={r.id} className="flex items-stretch border-b last:border-b-0">
-                                <button
-                                  className="flex-1 text-left px-4 py-3 hover:bg-slate-50 text-sm"
-                                  onClick={() => {
-                                    setToEmailInput(r.email);
-                                    setOpenTo(false);
-                                    setShowRecipientMeta(false);
-                                  }}
-                                  type="button"
-                                >
-                                  <div className="font-semibold text-slate-800">{r.email}</div>
-                                  <div className="text-xs text-slate-500">{r.name}</div>
-                                </button>
-                                <button
-                                  className="w-12 flex items-center justify-center hover:bg-red-50 text-red-500"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteRecipientById(r.id);
-                                  }}
-                                  type="button"
-                                  aria-label="宛先を削除"
-                                >
-                                  <Trash2 size={18} />
-                                </button>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    )}
+              {/* 新規宛先登録メタ情報（シンプル版） */}
+              {showRecipientMeta && (
+                <div className={styles.metaBox}>
+                  <div className={styles.row} style={{ justifyContent:'space-between', marginBottom:10 }}>
+                    <span className={styles.label}>新規登録: {pendingToEmail}</span>
+                    <button onClick={() => setShowRecipientMeta(false)}><X size={18}/></button>
                   </div>
-
-                  {/* 送信元 */}
-                  <div className="col-span-12 md:col-span-6 relative">
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                      送信元アドレス
-                    </label>
-
-                    <div className="flex gap-2">
-                      <input
-                        className="flex-1 h-11 rounded-lg border px-3 bg-white"
-                        placeholder="me@example.com"
-                        value={fromEmailInput}
-                        onChange={(e) => setFromEmailInput(e.target.value)}
-                        onFocus={() => setOpenFrom(false)}
-                      />
-                      <button
-                        className="h-11 px-4 rounded-xl bg-amber-100 text-slate-800 font-semibold hover:bg-amber-200 transition disabled:opacity-60"
-                        onClick={saveMyEmail}
-                        disabled={busy}
-                        type="button"
-                      >
-                        保存
-                      </button>
-                      <button
-                        className="h-11 w-11 rounded-xl border bg-white hover:bg-slate-50 flex items-center justify-center"
-                        onClick={() => setOpenFrom((v) => !v)}
-                        type="button"
-                        aria-label="送信元候補を開く"
-                      >
-                        {openFrom ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                      </button>
-                    </div>
-
-                    {openFrom && (
-                      <div className="absolute z-20 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
-                        <div className="max-h-56 overflow-auto">
-                          {myEmails.length === 0 ? (
-                            <div className="p-3 text-sm text-slate-500">候補がありません</div>
-                          ) : (
-                            myEmails.map((m) => (
-                              <div key={m.id} className="flex items-stretch border-b last:border-b-0">
-                                <button
-                                  className="flex-1 text-left px-4 py-3 hover:bg-slate-50 text-sm"
-                                  onClick={() => {
-                                    setFromEmailInput(m.email);
-                                    setOpenFrom(false);
-                                  }}
-                                  type="button"
-                                >
-                                  <div className="font-semibold text-slate-800">{m.email}</div>
-                                </button>
-                                <button
-                                  className="w-12 flex items-center justify-center hover:bg-red-50 text-red-500"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteMyEmailById(m.id);
-                                  }}
-                                  type="button"
-                                  aria-label="送信元を削除"
-                                >
-                                  <Trash2 size={18} />
-                                </button>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    )}
+                  <div className={styles.row}>
+                    <input className={styles.input} placeholder="名前 (例: 田中教授)" value={pendingToName} onChange={e => setPendingToName(e.target.value)} />
+                    <button className={styles.actionBtn} onClick={confirmSaveRecipient}>登録</button>
                   </div>
+                  <div className={styles.textSmall} style={{marginTop:8}}>※ アイコンはメールアドレスから自動生成されます</div>
                 </div>
+              )}
+            </div>
 
-                {/* content area */}
-                <div className="mt-8 rounded-2xl bg-slate-50 p-8">
-                  <div className="space-y-6">
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">件名</label>
-                      <input
-                        className="w-full h-11 rounded-lg border px-3 bg-white"
-                        placeholder="例）【欠席連絡】体調不良のため"
-                        value={subject}
-                        onChange={(e) => setSubject(e.target.value)}
-                      />
-                    </div>
+            <div className={styles.formGroup} style={{ marginTop: 20 }}>
+              <label className={styles.label}>件名</label>
+              <input 
+                className={styles.input} 
+                placeholder="例）【欠席連絡】体調不良のため"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+              />
+            </div>
 
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">本文</label>
-                      <textarea
-                        className="w-full min-h-[220px] rounded-lg border p-4 resize-none bg-white"
-                        placeholder="本文を入力してください"
-                        value={body}
-                        onChange={(e) => setBody(e.target.value)}
-                      />
-                    </div>
+            <div className={styles.formGroup} style={{ marginTop: 20 }}>
+              <label className={styles.label}>本文</label>
+              <textarea 
+                className={styles.textarea} 
+                style={{ minHeight: 200 }}
+                placeholder="本文を入力してください"
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+              />
+            </div>
 
-                    {/* 署名（入力＋保存＋▼、候補内🗑削除） */}
-                    <div className="relative">
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">署名</label>
-
-                      <textarea
-                        className="w-full min-h-[110px] rounded-lg border p-4 resize-none bg-white"
-                        placeholder={"例）\n○○大学 ○○学科\n学籍番号：xxxx\n氏名：…"}
-                        value={signatureInput}
-                        onChange={(e) => setSignatureInput(e.target.value)}
-                        onFocus={() => setOpenSig(false)}
-                      />
-
-                      <div className="mt-3 flex gap-2">
-                        <button
-                          className="h-11 px-4 rounded-xl bg-amber-100 text-slate-800 font-semibold hover:bg-amber-200 transition disabled:opacity-60"
-                          disabled={busy || !signatureInput.trim()}
-                          type="button"
-                          onClick={saveSignature}
-                        >
-                          保存
-                        </button>
-                        <button
-                          className="h-11 w-11 rounded-xl border bg-white hover:bg-slate-50 flex items-center justify-center"
-                          onClick={() => setOpenSig((v) => !v)}
-                          type="button"
-                          aria-label="署名候補を開く"
-                        >
-                          {openSig ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                        </button>
-                      </div>
-
-                      {openSig && (
-                        <div className="absolute z-20 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
-                          <div className="max-h-56 overflow-auto">
-                            {signatures.length === 0 ? (
-                              <div className="p-3 text-sm text-slate-500">候補がありません</div>
-                            ) : (
-                              signatures.map((s) => (
-                                <div key={s.id} className="flex items-stretch border-b last:border-b-0">
-                                  <button
-                                    className="flex-1 text-left px-4 py-3 hover:bg-slate-50 text-sm"
-                                    onClick={() => {
-                                      setSignatureInput(s.content);
-                                      setOpenSig(false);
-                                    }}
-                                    type="button"
-                                  >
-                                    <div className="text-xs text-slate-500 mb-1">署名 {s.id}</div>
-                                    <div className="whitespace-pre-wrap text-slate-800">{s.content}</div>
-                                  </button>
-                                  <button
-                                    className="w-12 flex items-center justify-center hover:bg-red-50 text-red-500"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      deleteSignatureById(s.id);
-                                    }}
-                                    type="button"
-                                    aria-label="署名を削除"
-                                  >
-                                    <Trash2 size={18} />
-                                  </button>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* テンプレ（任意） */}
-                    <div className="mt-2">
-                      <button
-                        className="h-11 px-4 rounded-xl bg-amber-100 text-slate-800 font-semibold hover:bg-amber-200 transition"
-                        type="button"
-                        onClick={() => setShowTemplateArea((v) => !v)}
-                      >
-                        {showTemplateArea ? "テンプレを閉じる" : "テンプレを使う"}
-                      </button>
-
-                      {showTemplateArea && (
-                        <div className="mt-3 rounded-2xl border bg-white p-5">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="text-sm font-semibold text-slate-800">テンプレ</div>
-                            <div className="text-xs text-slate-500">
-                            </div>
-                          </div>
-
-                          <textarea
-                            className="mt-3 w-full min-h-[110px] rounded-lg border p-4 resize-none bg-white"
-                            value={templateInput}
-                            onChange={(e) => setTemplateInput(e.target.value)}
-                            onFocus={() => setOpenTpl(false)}
-                          />
-
-                          <div className="mt-3 flex gap-2 relative">
-                            <button
-                              className="h-11 px-4 rounded-xl bg-amber-100 text-slate-800 font-semibold hover:bg-amber-200 transition disabled:opacity-60"
-                              disabled={busy || !templateInput.trim()}
-                              type="button"
-                              onClick={saveTemplate}
-                            >
-                              保存
-                            </button>
-
-                            <button
-                              className="h-11 w-11 rounded-xl border bg-white hover:bg-slate-50 flex items-center justify-center"
-                              onClick={() => setOpenTpl((v) => !v)}
-                              type="button"
-                              aria-label="テンプレ候補を開く"
-                            >
-                              {openTpl ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                            </button>
-
-                            {openTpl && (
-                              <div className="absolute z-20 mt-12 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
-                                <div className="max-h-56 overflow-auto">
-                                  {templates.length === 0 ? (
-                                    <div className="p-3 text-sm text-slate-500">候補がありません</div>
-                                  ) : (
-                                    templates.map((t) => (
-                                      <div key={t.id} className="flex items-stretch border-b last:border-b-0">
-                                        <button
-                                          className="flex-1 text-left px-4 py-3 hover:bg-slate-50 text-sm"
-                                          onClick={() => handleApplyTemplate(t)}
-                                          type="button"
-                                        >
-                                          <div className="text-xs text-slate-500 mb-1">テンプレ {t.id}</div>
-                                          <div className="whitespace-pre-wrap text-slate-800 line-clamp-4">
-                                            {t.content}
-                                          </div>
-                                        </button>
-                                        <button
-                                          className="w-12 flex items-center justify-center hover:bg-red-50 text-red-500"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            deleteTemplateById(t.id);
-                                          }}
-                                          type="button"
-                                          aria-label="テンプレを削除"
-                                        >
-                                          <Trash2 size={18} />
-                                        </button>
-                                      </div>
-                                    ))
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="mt-2 text-xs text-slate-500">
-                          {TEMPLATE_MARKER}が本文が入る位置となります
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={handleSendAndSave}
-                      disabled={busy}
-                      className="w-full h-12 rounded-xl bg-amber-100 text-slate-800 font-semibold hover:bg-amber-200 transition flex items-center justify-center gap-2 disabled:opacity-60"
-                      type="button"
-                    >
-                      <Send size={18} />
-                      Send message
+            <div className={styles.formGroup} style={{ marginTop: 20 }}>
+              <div className={styles.relative}>
+                <label className={styles.label}>署名 (任意)</label>
+                <div className={styles.row} style={{ marginTop: 6, alignItems:'flex-start' }}>
+                  <textarea 
+                    className={styles.textarea} 
+                    style={{ minHeight: 80 }}
+                    placeholder={"例）\n○○大学 ○○学科\n氏名：..."}
+                    value={signatureInput}
+                    onChange={(e) => setSignatureInput(e.target.value)}
+                    onFocus={() => setOpenSig(false)}
+                  />
+                  <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                    <button className={styles.actionBtn} onClick={saveSignature} disabled={busy}>保存</button>
+                    <button className={styles.iconBtn} onClick={() => setOpenSig(!openSig)}>
+                      {openSig ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
                     </button>
-
-                    <div className="text-xs text-slate-500">
-                      ※ 宛先/送信元が未保存の場合は送信できません（先に「保存」を押してください）
-                    </div>
                   </div>
                 </div>
+                {openSig && (
+                  <div className={styles.dropdown}>
+                    {signatures.map(s => (
+                      <div key={s.id} className={styles.dropdownItem}>
+                        <div onClick={() => { setSignatureInput(s.content); setOpenSig(false); }} style={{whiteSpace:'pre-wrap', fontSize:12}}>
+                          {s.content}
+                        </div>
+                        <button onClick={() => deleteItem('signatures', s.id)}><Trash2 size={16} color="#d32f2f"/></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="h-16" />
+            {/* テンプレエリア */}
+            <div style={{ marginTop: 20 }}>
+              <button 
+                className={styles.actionBtn} 
+                style={{ background: '#fff', border: '1px solid #ddd' }}
+                onClick={() => setShowTemplateArea(!showTemplateArea)}
+              >
+                {showTemplateArea ? "テンプレを閉じる" : "▼ テンプレを使う"}
+              </button>
+
+              {showTemplateArea && (
+                <div className={styles.metaBox} style={{ marginTop: 10 }}>
+                  <div className={styles.relative}>
+                    <textarea 
+                      className={styles.textarea} 
+                      style={{ minHeight: 100 }}
+                      value={templateInput}
+                      onChange={(e) => setTemplateInput(e.target.value)}
+                      onFocus={() => setOpenTpl(false)}
+                    />
+                    <div className={styles.row} style={{ marginTop: 8 }}>
+                      <button className={styles.actionBtn} onClick={saveTemplate} disabled={busy}>この内容で登録</button>
+                      <button className={styles.iconBtn} onClick={() => setOpenTpl(!openTpl)}>
+                        {openTpl ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+                      </button>
+                    </div>
+                    
+                    {openTpl && (
+                       <div className={styles.dropdown} style={{ bottom: '100%', top: 'auto', marginBottom: 8 }}>
+                         {templates.map(t => (
+                           <div key={t.id} className={styles.dropdownItem}>
+                             <div onClick={() => handleApplyTemplate(t)} style={{whiteSpace:'pre-wrap', fontSize:12, flex:1}}>
+                               {t.content.slice(0,80)}...
+                             </div>
+                             <button onClick={() => deleteTemplate(t.id)}><Trash2 size={16} color="#d32f2f"/></button>
+                           </div>
+                         ))}
+                       </div>
+                    )}
+                  </div>
+                  <div className={styles.textSmall} style={{marginTop:8}}>※ {TEMPLATE_MARKER} の部分に本文が挿入されます</div>
+                </div>
+              )}
+            </div>
+
+            <button className={styles.sendButton} onClick={handleSendAndSave} disabled={busy}>
+              <Send size={20} />
+              送信履歴に記録する
+            </button>
+            <div className={styles.textSmall} style={{ textAlign:'center', marginTop:8 }}>
+              ※ 宛先・送信元が未保存の場合は押せません
+            </div>
           </div>
         </div>
       </div>

@@ -21,31 +21,39 @@ type SentMailWithAddress struct {
 }
 
 func getUserID(c echo.Context, db *gorm.DB) uint64 {
-	if idStr := c.Request().Header.Get("X-User-ID"); idStr != "" {
-		if id, err := strconv.ParseUint(idStr, 10, 64); err == nil && id != 0 {
-			var user model.User
-			if err := db.First(&user, id).Error; err == nil {
-				return user.ID
-			}
-			return 0
-		}
-	}
-
-	// 2) X-User-Email でもOK（将来用）
 	email := c.Request().Header.Get("X-User-Email")
 	if email == "" {
+		// Emailヘッダーが無い場合は認証不可
 		return 0
 	}
+
 	var user model.User
-	if err := db.Where("email = ?", email).First(&user).Error; err != nil {
+	// 1. Emailで検索
+	if err := db.Where("email = ?", email).First(&user).Error; err == nil {
+		return user.ID
+	}
+
+	// 2. 見つからなければ、新規ユーザーとして作成してしまう
+	// 名前はとりあえず @ の前を使う
+	name := strings.Split(email, "@")[0]
+	newUser := model.User{
+		Email:     email,
+		Name:      name,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	if err := db.Create(&newUser).Error; err != nil {
+		// 作成失敗
 		return 0
 	}
-	return user.ID
+
+	return newUser.ID
 }
 
 // InitMailRoutes ルーティング登録
 func InitMailRoutes(e *echo.Echo, db *gorm.DB) {
-	// 全ハンドラーに db を渡すように変更
+	// 全ハンドラーに db を渡す
 	e.GET("/emails", GetEmailList(db))
 	e.GET("/my-emails", GetMyEmails(db))
 	e.GET("/signatures", GetSignatures(db))
@@ -79,7 +87,7 @@ func parseIDParam(c echo.Context) (uint64, error) {
 
 func GetEmailList(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		userID := getUserID(c, db) // ★DB検索を使用
+		userID := getUserID(c, db)
 		if userID == 0 {
 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "ユーザーが見つかりません"})
 		}
