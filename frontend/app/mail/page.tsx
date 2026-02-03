@@ -44,7 +44,6 @@ type SentMail = {
   from_email?: string;
 };
 
-const devUserID = 1;
 const API_BASE = "http://localhost:8080";
 const TEMPLATE_MARKER = "{{BODY}}";
 
@@ -97,6 +96,9 @@ function applyTemplate(tpl: string, raw: string) {
 }
 
 export default function MailConfirmPage() {
+  // ★ 開発用: ユーザーID切り替え機能
+  const [debugUserId, setDebugUserId] = useState(1);
+
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [myEmails, setMyEmails] = useState<MyEmail[]>([]);
   const [signatures, setSignatures] = useState<Signature[]>([]);
@@ -153,30 +155,59 @@ export default function MailConfirmPage() {
 
   const selectedRecipientName = selectedRecipient?.name?.trim() || "（未保存の宛先）";
 
-  const refetchAll = async () => {
-    const [emailsRes, myEmailsRes, sigsRes] = await Promise.all([
-      fetch(`${API_BASE}/emails`),
-      fetch(`${API_BASE}/my-emails`),
-      fetch(`${API_BASE}/signatures`),
-    ]);
+  // ★ API Fetch Wrapper: debugUserId をヘッダーに付与
+  const apiFetch = async (path: string, options: RequestInit = {}) => {
+    const headers = new Headers(options.headers);
+    headers.set("X-User-ID", String(debugUserId));
+    if (!headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
 
-    const emailsData = (await emailsRes.json()) as Recipient[];
-    const myEmailsData = (await myEmailsRes.json()) as MyEmail[];
-    const sigsData = (await sigsRes.json()) as Signature[];
-
-    setRecipients(emailsData);
-    setMyEmails(myEmailsData);
-    setSignatures(sigsData);
-
-    if (!toEmailInput && emailsData.length > 0) setToEmailInput(emailsData[0].email);
-    if (!fromEmailInput && myEmailsData.length > 0) setFromEmailInput(myEmailsData[0].email);
-    if (!signatureInput && sigsData.length > 0) setSignatureInput(sigsData[0].content);
+    // path は '/emails' 等で渡す想定
+    return fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+    });
   };
 
+  const refetchAll = async () => {
+    // ユーザー切り替え時にリセット
+    setRecipients([]);
+    setMyEmails([]);
+    setSignatures([]);
+    setToEmailInput("");
+    setFromEmailInput("");
+    setSignatureInput("");
+    setHistory([]);
+
+    try {
+      const [emailsRes, myEmailsRes, sigsRes] = await Promise.all([
+        apiFetch(`/emails`),
+        apiFetch(`/my-emails`),
+        apiFetch(`/signatures`),
+      ]);
+
+      const emailsData = (await emailsRes.json()) as Recipient[];
+      const myEmailsData = (await myEmailsRes.json()) as MyEmail[];
+      const sigsData = (await sigsRes.json()) as Signature[];
+
+      setRecipients(Array.isArray(emailsData) ? emailsData : []);
+      setMyEmails(Array.isArray(myEmailsData) ? myEmailsData : []);
+      setSignatures(Array.isArray(sigsData) ? sigsData : []);
+
+      if (Array.isArray(emailsData) && emailsData.length > 0) setToEmailInput(emailsData[0].email);
+      if (Array.isArray(myEmailsData) && myEmailsData.length > 0) setFromEmailInput(myEmailsData[0].email);
+      if (Array.isArray(sigsData) && sigsData.length > 0) setSignatureInput(sigsData[0].content);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // debugUserId が変わるたびに再取得
   useEffect(() => {
     refetchAll().catch((e) => console.error(e));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [debugUserId]);
 
   // ----------------------------
   // Save / Delete: Recipients
@@ -217,7 +248,7 @@ export default function MailConfirmPage() {
     }
 
     const payload = {
-      user_id: devUserID,
+      user_id: debugUserId, // ★ debugUserId を使用
       email,
       name: pendingToName.trim(),
       avatar_url: pendingToAvatar.trim(),
@@ -225,9 +256,8 @@ export default function MailConfirmPage() {
 
     try {
       setBusy(true);
-      const res = await fetch(`${API_BASE}/emails`, {
+      const res = await apiFetch(`/emails`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -261,13 +291,12 @@ export default function MailConfirmPage() {
       return;
     }
 
-    const payload = { user_id: devUserID, email };
+    const payload = { user_id: debugUserId, email }; // ★ debugUserId
 
     try {
       setBusy(true);
-      const res = await fetch(`${API_BASE}/my-emails`, {
+      const res = await apiFetch(`/my-emails`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -304,13 +333,12 @@ export default function MailConfirmPage() {
       return;
     }
 
-    const payload = { user_id: devUserID, content };
+    const payload = { user_id: debugUserId, content }; // ★ debugUserId
 
     try {
       setBusy(true);
-      const res = await fetch(`${API_BASE}/signatures`, {
+      const res = await apiFetch(`/signatures`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -350,8 +378,8 @@ export default function MailConfirmPage() {
     }
 
     try {
-      const res = await fetch(
-        `${API_BASE}/templates?email_list_id=${recipient.id}&my_email_list_id=${my.id}`
+      const res = await apiFetch(
+        `/templates?email_list_id=${recipient.id}&my_email_list_id=${my.id}`
       );
       if (!res.ok) return;
       const data: Template[] = await res.json();
@@ -365,10 +393,9 @@ export default function MailConfirmPage() {
     if (!showTemplateArea) return;
     fetchTemplates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showTemplateArea, toEmailInput, fromEmailInput, recipients, myEmails]);
+  }, [showTemplateArea, toEmailInput, fromEmailInput, recipients, myEmails, debugUserId]);
 
   const handleApplyTemplate = (tpl: Template) => {
-    // 古いテンプレで包まれていれば「中身」だけ抜いて、新テンプレに差し替え
     const raw = extractRawFromTemplatedBody(body, activeTemplateContent);
 
     try {
@@ -415,14 +442,13 @@ export default function MailConfirmPage() {
       content,
       email_list_id: recipient.id,
       my_email_list_id: my.id,
-      user_id: devUserID,
+      user_id: debugUserId, // ★ debugUserId
     };
 
     try {
       setBusy(true);
-      const res = await fetch(`${API_BASE}/templates`, {
+      const res = await apiFetch(`/templates`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -440,7 +466,7 @@ export default function MailConfirmPage() {
       const created: Template | null = await res.json().catch(() => null);
       const tplContent = created?.content ?? content;
 
-      // 保存したらそのまま即適用（本文テキストエリアが置換される）
+      // 保存したらそのまま即適用
       const raw = extractRawFromTemplatedBody(body, activeTemplateContent);
       setBody(applyTemplate(tplContent, raw));
       setActiveTemplateId(created?.id ?? null);
@@ -463,14 +489,13 @@ export default function MailConfirmPage() {
   const deleteTemplateById = async (id: number) => {
     try {
       setBusy(true);
-      const res = await fetch(`${API_BASE}/templates/${id}`, { method: "DELETE" });
+      const res = await apiFetch(`/templates/${id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) {
         const j = await res.json().catch(() => null);
         alert(j?.error || "削除に失敗しました");
         return;
       }
 
-      // 削除したテンプレが適用中だったら解除
       if (activeTemplateId === id) {
         clearTemplate();
       }
@@ -491,7 +516,7 @@ export default function MailConfirmPage() {
   const deleteRecipientById = async (id: number) => {
     try {
       setBusy(true);
-      const res = await fetch(`${API_BASE}/emails/${id}`, { method: "DELETE" });
+      const res = await apiFetch(`/emails/${id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) {
         const j = await res.json().catch(() => null);
         alert(j?.error || "削除に失敗しました");
@@ -509,7 +534,7 @@ export default function MailConfirmPage() {
   const deleteMyEmailById = async (id: number) => {
     try {
       setBusy(true);
-      const res = await fetch(`${API_BASE}/my-emails/${id}`, { method: "DELETE" });
+      const res = await apiFetch(`/my-emails/${id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) {
         const j = await res.json().catch(() => null);
         alert(j?.error || "削除に失敗しました");
@@ -527,7 +552,7 @@ export default function MailConfirmPage() {
   const deleteSignatureById = async (id: number) => {
     try {
       setBusy(true);
-      const res = await fetch(`${API_BASE}/signatures/${id}`, { method: "DELETE" });
+      const res = await apiFetch(`/signatures/${id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) {
         const j = await res.json().catch(() => null);
         alert(j?.error || "削除に失敗しました");
@@ -571,21 +596,19 @@ export default function MailConfirmPage() {
       return;
     }
 
-    // 本文テキストエリアの内容（テンプレ適用時は既に置換済み）
     const fullMessage = `${body}\n\n${signatureInput}`;
 
     const payload = {
       content: `件名：${subject}\n\n${fullMessage}`,
       email_list_id: recipient.id,
       my_email_list_id: my.id,
-      user_id: devUserID,
+      user_id: debugUserId, // ★ debugUserId
     };
 
     try {
       setBusy(true);
-      const response = await fetch(`${API_BASE}/sent`, {
+      const response = await apiFetch(`/sent`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -633,7 +656,8 @@ export default function MailConfirmPage() {
         if (my) params.set("my_email_list_id", String(my.id));
       }
 
-      const res = await fetch(`${API_BASE}/sent?${params.toString()}`);
+      // Query parameterはURLに含める
+      const res = await apiFetch(`/sent?${params.toString()}`);
       if (!res.ok) {
         const j = await res.json().catch(() => null);
         setHistoryError(j?.error || "履歴の取得に失敗しました");
@@ -667,15 +691,34 @@ export default function MailConfirmPage() {
     fromEmailInput,
     recipients,
     myEmails,
+    debugUserId, // ユーザーID変更時も再取得
   ]);
 
   return (
     <div className="min-h-screen bg-slate-100">
       <div className="mx-auto max-w-6xl px-4 py-10">
+        
+        {/* ★ デバッグ用: ユーザーID切り替えエリア */}
+        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-4 shadow-sm">
+           <span className="font-bold text-sm text-yellow-800">開発用ユーザー切り替え:</span>
+           <div className="flex items-center gap-2">
+             <label className="text-sm font-semibold">User ID:</label>
+             <input 
+               type="number" 
+               className="border border-yellow-300 rounded px-2 py-1 w-20 text-center"
+               value={debugUserId}
+               onChange={(e) => setDebugUserId(Number(e.target.value))}
+               min={1}
+             />
+             <span className="text-xs text-slate-500 ml-2">
+             </span>
+           </div>
+        </div>
+
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">ご教授ください</h1>
+            <h1 className="text-2xl font-bold text-slate-900">メール</h1>
           </div>
           <button
             className="text-sm px-4 h-10 rounded-xl border bg-white hover:bg-slate-50"

@@ -12,14 +12,24 @@ import (
 	"gorm.io/gorm"
 )
 
-const devUserID uint64 = 1
-
 type SentMailWithAddress struct {
 	ID        uint64    `json:"id"`
 	Content   string    `json:"content"`
 	ToEmail   string    `json:"to_email"`
 	FromEmail string    `json:"from_email"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+func getUserID(c echo.Context) uint64 {
+	idStr := c.Request().Header.Get("X-User-ID")
+	if idStr == "" {
+		return 1
+	}
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		return 1
+	}
+	return id
 }
 
 func InitMailRoutes(e *echo.Echo, db *gorm.DB) {
@@ -44,7 +54,7 @@ func InitMailRoutes(e *echo.Echo, db *gorm.DB) {
 	// sent
 	e.POST("/sent", CreateSentMail(db))
 
-	// ★送信履歴（絞り込み・ソート対応）
+	// 送信履歴
 	e.GET("/sent", GetSentMails(db))
 }
 
@@ -58,41 +68,12 @@ func parseIDParam(c echo.Context) (uint64, error) {
 	return id64, nil
 }
 
-func parseUintQuery(c echo.Context, key string) (uint64, bool) {
-	v := strings.TrimSpace(c.QueryParam(key))
-	if v == "" {
-		return 0, false
-	}
-	u, err := strconv.ParseUint(v, 10, 64)
-	if err != nil || u == 0 {
-		return 0, false
-	}
-	return u, true
-}
-
-func parseLimit(c echo.Context, def int) int {
-	v := strings.TrimSpace(c.QueryParam("limit"))
-	if v == "" {
-		return def
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return def
-	}
-	if n < 1 {
-		return 1
-	}
-	if n > 200 {
-		return 200
-	}
-	return n
-}
-
 // ---------- GETs ----------
 func GetEmailList(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		userID := getUserID(c)
 		var list []model.EmailList
-		if err := db.Where("user_id = ?", devUserID).Find(&list).Error; err != nil {
+		if err := db.Where("user_id = ?", userID).Find(&list).Error; err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "宛先一覧の取得に失敗しました"})
 		}
 		return c.JSON(http.StatusOK, list)
@@ -101,8 +82,9 @@ func GetEmailList(db *gorm.DB) echo.HandlerFunc {
 
 func GetMyEmails(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		userID := getUserID(c)
 		var myEmails []model.MyEmailList
-		if err := db.Where("user_id = ?", devUserID).Find(&myEmails).Error; err != nil {
+		if err := db.Where("user_id = ?", userID).Find(&myEmails).Error; err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "送信元アドレスの取得に失敗しました"})
 		}
 		return c.JSON(http.StatusOK, myEmails)
@@ -111,17 +93,19 @@ func GetMyEmails(db *gorm.DB) echo.HandlerFunc {
 
 func GetSignatures(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		userID := getUserID(c)
 		var signs []model.SignatureList
-		if err := db.Where("user_id = ?", devUserID).Find(&signs).Error; err != nil {
+		if err := db.Where("user_id = ?", userID).Find(&signs).Error; err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "署名一覧の取得に失敗しました"})
 		}
 		return c.JSON(http.StatusOK, signs)
 	}
 }
 
-// ★送信履歴取得（絞り込み・ソート・limit・検索）
+// 送信履歴取得（絞り込み・ソート・limit・検索）
 func GetSentMails(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		userID := getUserID(c)
 		var result []SentMailWithAddress
 
 		sort := c.QueryParam("sort")
@@ -141,7 +125,7 @@ func GetSentMails(db *gorm.DB) echo.HandlerFunc {
 			`).
 			Joins("JOIN email_lists el ON el.id = sent_mails.email_list_id").
 			Joins("JOIN my_email_lists me ON me.id = sent_mails.my_email_list_id").
-			Where("sent_mails.user_id = ?", 1).
+			Where("sent_mails.user_id = ?", userID).
 			Order("sent_mails.created_at " + sort)
 
 		if emailListID != "" {
@@ -167,6 +151,7 @@ type createEmailReq struct {
 
 func CreateEmail(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		userID := getUserID(c)
 		req := new(createEmailReq)
 		if err := c.Bind(req); err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "データの形式が正しくありません"})
@@ -181,14 +166,14 @@ func CreateEmail(db *gorm.DB) echo.HandlerFunc {
 		}
 
 		var existing model.EmailList
-		if err := db.Where("user_id = ? AND lower(email) = lower(?)", devUserID, email).First(&existing).Error; err == nil {
+		if err := db.Where("user_id = ? AND lower(email) = lower(?)", userID, email).First(&existing).Error; err == nil {
 			return c.JSON(http.StatusConflict, map[string]string{"error": "既に登録されています"})
 		} else if err != gorm.ErrRecordNotFound {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "宛先の重複チェックに失敗しました"})
 		}
 
 		record := model.EmailList{
-			UserID:    devUserID,
+			UserID:    userID,
 			Name:      name,
 			Email:     email,
 			AvatarURL: avatar,
@@ -206,6 +191,7 @@ type createMyEmailReq struct {
 
 func CreateMyEmail(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		userID := getUserID(c)
 		req := new(createMyEmailReq)
 		if err := c.Bind(req); err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "データの形式が正しくありません"})
@@ -217,14 +203,14 @@ func CreateMyEmail(db *gorm.DB) echo.HandlerFunc {
 		}
 
 		var existing model.MyEmailList
-		if err := db.Where("user_id = ? AND lower(email) = lower(?)", devUserID, email).First(&existing).Error; err == nil {
+		if err := db.Where("user_id = ? AND lower(email) = lower(?)", userID, email).First(&existing).Error; err == nil {
 			return c.JSON(http.StatusConflict, map[string]string{"error": "既に登録されています"})
 		} else if err != gorm.ErrRecordNotFound {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "送信元の重複チェックに失敗しました"})
 		}
 
 		record := model.MyEmailList{
-			UserID: devUserID,
+			UserID: userID,
 			Email:  email,
 		}
 		if err := db.Create(&record).Error; err != nil {
@@ -240,6 +226,7 @@ type createSignatureReq struct {
 
 func CreateSignature(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		userID := getUserID(c)
 		req := new(createSignatureReq)
 		if err := c.Bind(req); err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "データの形式が正しくありません"})
@@ -251,14 +238,14 @@ func CreateSignature(db *gorm.DB) echo.HandlerFunc {
 		}
 
 		var existing model.SignatureList
-		if err := db.Where("user_id = ? AND content = ?", devUserID, content).First(&existing).Error; err == nil {
+		if err := db.Where("user_id = ? AND content = ?", userID, content).First(&existing).Error; err == nil {
 			return c.JSON(http.StatusConflict, map[string]string{"error": "既に登録されています"})
 		} else if err != gorm.ErrRecordNotFound {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "署名の重複チェックに失敗しました"})
 		}
 
 		record := model.SignatureList{
-			UserID:  devUserID,
+			UserID:  userID,
 			Content: content,
 		}
 		if err := db.Create(&record).Error; err != nil {
@@ -271,18 +258,19 @@ func CreateSignature(db *gorm.DB) echo.HandlerFunc {
 // ---------- DELETEs ----------
 func DeleteEmail(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		userID := getUserID(c)
 		id, err := parseIDParam(c)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "id が不正です"})
 		}
 
 		var target model.EmailList
-		if err := db.Where("id = ? AND user_id = ?", id, devUserID).First(&target).Error; err != nil {
+		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&target).Error; err != nil {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "宛先が見つかりません"})
 		}
 
 		var cnt int64
-		if err := db.Model(&model.SentMail{}).Where("email_list_id = ? AND user_id = ?", id, devUserID).Count(&cnt).Error; err != nil {
+		if err := db.Model(&model.SentMail{}).Where("email_list_id = ? AND user_id = ?", id, userID).Count(&cnt).Error; err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "参照チェックに失敗しました"})
 		}
 		if cnt > 0 {
@@ -298,18 +286,19 @@ func DeleteEmail(db *gorm.DB) echo.HandlerFunc {
 
 func DeleteMyEmail(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		userID := getUserID(c)
 		id, err := parseIDParam(c)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "id が不正です"})
 		}
 
 		var target model.MyEmailList
-		if err := db.Where("id = ? AND user_id = ?", id, devUserID).First(&target).Error; err != nil {
+		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&target).Error; err != nil {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "送信元が見つかりません"})
 		}
 
 		var cnt int64
-		if err := db.Model(&model.SentMail{}).Where("my_email_list_id = ? AND user_id = ?", id, devUserID).Count(&cnt).Error; err != nil {
+		if err := db.Model(&model.SentMail{}).Where("my_email_list_id = ? AND user_id = ?", id, userID).Count(&cnt).Error; err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "参照チェックに失敗しました"})
 		}
 		if cnt > 0 {
@@ -325,13 +314,14 @@ func DeleteMyEmail(db *gorm.DB) echo.HandlerFunc {
 
 func DeleteSignature(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		userID := getUserID(c)
 		id, err := parseIDParam(c)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "id が不正です"})
 		}
 
 		var target model.SignatureList
-		if err := db.Where("id = ? AND user_id = ?", id, devUserID).First(&target).Error; err != nil {
+		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&target).Error; err != nil {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "署名が見つかりません"})
 		}
 
@@ -351,6 +341,7 @@ type createSentReq struct {
 
 func CreateSentMail(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		userID := getUserID(c)
 		req := new(createSentReq)
 		if err := c.Bind(req); err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "データの形式が正しくありません"})
@@ -365,11 +356,11 @@ func CreateSentMail(db *gorm.DB) echo.HandlerFunc {
 		}
 
 		var to model.EmailList
-		if err := db.Where("id = ? AND user_id = ?", req.EmailListID, devUserID).First(&to).Error; err != nil {
+		if err := db.Where("id = ? AND user_id = ?", req.EmailListID, userID).First(&to).Error; err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "宛先が存在しません"})
 		}
 		var from model.MyEmailList
-		if err := db.Where("id = ? AND user_id = ?", req.MyEmailListID, devUserID).First(&from).Error; err != nil {
+		if err := db.Where("id = ? AND user_id = ?", req.MyEmailListID, userID).First(&from).Error; err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "送信元が存在しません"})
 		}
 
@@ -377,7 +368,7 @@ func CreateSentMail(db *gorm.DB) echo.HandlerFunc {
 			Content:       content,
 			EmailListID:   req.EmailListID,
 			MyEmailListID: req.MyEmailListID,
-			UserID:        devUserID,
+			UserID:        userID,
 		}
 		if err := db.Create(&record).Error; err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "履歴の保存に失敗しました"})
@@ -385,15 +376,15 @@ func CreateSentMail(db *gorm.DB) echo.HandlerFunc {
 
 		return c.JSON(http.StatusCreated, record)
 	}
-
 }
 
 // GetTemplates テンプレ一覧（宛先/送信元で絞り込み）
 func GetTemplates(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		userID := getUserID(c)
 		var list []model.Template
 
-		q := db.Where("user_id = ?", devUserID)
+		q := db.Where("user_id = ?", userID)
 
 		if v := c.QueryParam("email_list_id"); v != "" {
 			q = q.Where("email_list_id = ?", v)
@@ -418,6 +409,7 @@ type createTemplateReq struct {
 // CreateTemplate テンプレを保存（宛先/送信元必須）
 func CreateTemplate(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		userID := getUserID(c)
 		req := new(createTemplateReq)
 		if err := c.Bind(req); err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "データの形式が正しくありません"})
@@ -431,11 +423,10 @@ func CreateTemplate(db *gorm.DB) echo.HandlerFunc {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "宛先/送信元が未指定です"})
 		}
 
-		// 重複チェック（同じ宛先・送信元・本文は弾く）
 		var existing model.Template
 		err := db.Where(
 			"user_id = ? AND email_list_id = ? AND my_email_list_id = ? AND content = ?",
-			devUserID, req.EmailListID, req.MyEmailListID, content,
+			userID, req.EmailListID, req.MyEmailListID, content,
 		).First(&existing).Error
 
 		if err == nil {
@@ -446,7 +437,7 @@ func CreateTemplate(db *gorm.DB) echo.HandlerFunc {
 		}
 
 		record := model.Template{
-			UserID:        devUserID,
+			UserID:        userID,
 			EmailListID:   req.EmailListID,
 			MyEmailListID: req.MyEmailListID,
 			Content:       content,
@@ -460,16 +451,16 @@ func CreateTemplate(db *gorm.DB) echo.HandlerFunc {
 	}
 }
 
-// DeleteTemplate テンプレ削除
 func DeleteTemplate(db *gorm.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		userID := getUserID(c)
 		id, err := parseIDParam(c)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "id が不正です"})
 		}
 
 		var target model.Template
-		if err := db.Where("id = ? AND user_id = ?", id, devUserID).First(&target).Error; err != nil {
+		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&target).Error; err != nil {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "テンプレが見つかりません"})
 		}
 
