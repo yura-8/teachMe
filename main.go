@@ -116,6 +116,23 @@ func main() {
     return c.JSON(http.StatusOK, map[string]string{"message": "教授への語彙コピーが完了しました！"})
   })
 
+	// 特定の教授の語彙一覧を取得するAPI
+  e.GET("/vocabularies", func(c echo.Context) error {
+    userID := c.QueryParam("user_id")
+    profID := c.QueryParam("prof_id")
+
+    var vocabs []model.Vocabulary
+      if profID != "" {
+        // 教授ID指定がある場合
+        database.Where("user_id = ? AND email_list_id = ?", userID, profID).Find(&vocabs)
+      } else {
+        // 指定がない場合は全件
+        database.Where("user_id = ?", userID).Find(&vocabs)
+      }
+        
+      return c.JSON(http.StatusOK, vocabs)
+  })
+
 	// ユーザーログイン・登録関連
 	userHandler := handler.NewUserHandler(database)
 	e.POST("/api/users/login", userHandler.LoginUser)
