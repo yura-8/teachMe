@@ -1,0 +1,181 @@
+.container {
+  min-height: 100vh;
+  padding: 40px 20px;
+  background-image: linear-gradient(to top, #fddb92 0%, #d1fdff 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: sans-serif;
+}
+
+/* 教授選択バッジ */
+.currentProfSelector {
+  align-self: flex-start;
+  margin-bottom: 20px;
+  width: 100%;
+  max-width: 500px;
+}
+
+.profBadge {
+  background: #fef08a;
+  border: 1px solid #eab308;
+  padding: 8px 16px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatarMini {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: white;
+  border: 1px solid #ddd;
+}
+
+.profNameLabel {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+/* 貯金箱エリア */
+.heroSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 50px;
+  width: 90%;
+}
+
+.piggyBankWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 20px; 
+  transform: translateX(0px); 
+  width: 90%;
+}
+
+.speechBubble {
+  background: #fff;
+  border: 2px solid #333;
+  border-radius: 30px;
+  padding: 15px 20px;
+  margin-bottom: 15px;
+  position: relative;
+  box-shadow: 4px 4px 0px rgba(0,0,0,0.1);
+  width: 90%; 
+  transition: height 0.2s ease;
+}
+
+/* 吹き出しのしっぽ */
+.speechBubble::after {
+  content: "";
+  position: absolute;
+  bottom: -15px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 15px 15px 0;
+  border-style: solid;
+  border-color: #333 transparent transparent;
+}
+
+.wordInput {
+  border: none;
+  outline: none;
+  font-size: 20px;
+  text-align: center;
+  width: 100%;
+  background: transparent;
+  resize: none; 
+  font-family: inherit;
+  transition: height 0.2s ease;
+}
+
+.piggyImg {
+  width: 180px;
+  height: auto;
+}
+
+.registerButton {
+  background-color: #fef08a;
+  border: 1px solid #eab308;
+  padding: 10px 60px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  margin-top: 25px;
+}
+
+/* リスト部分 */
+.listSection {
+  width: 100%;
+  max-width: 500px;
+}
+
+.profListGroup {
+  margin-bottom: 30px;
+}
+
+.listHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.avatarMicro {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: white;
+}
+
+.listLabel {
+  font-size: 13px;
+  color: #444;
+  font-weight: 500;
+}
+
+.tableContainer {
+  background: #fff;
+  border: 1px solid #333;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.vocabTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.vocabTable td {
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.checkCol {
+  width: 40px;
+  text-align: center;
+}
+
+.wordCol {
+  font-size: 14px;
+}
+
+.actionButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.subButton {
+  background: #fef08a;
+  border: 1px solid #eab308;
+  padding: 6px 16px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}

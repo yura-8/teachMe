@@ -61,3 +61,10 @@ func (s *VocabularyService) CopyToProfessor(userID uint64, vocabIDs []uint64, ta
     }
     return nil
 }
+
+// 特定の教授(profID)に登録されている語彙一覧を取得
+func (s *VocabularyService) GetVocabulariesByProfessor(userID uint64, profID uint64) ([]model.Vocabulary, error) {
+    var vocabs []model.Vocabulary
+    err := s.DB.Where("user_id = ? AND email_list_id = ?", userID, profID).Find(&vocabs).Error
+    return vocabs, err
+}
