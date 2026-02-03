@@ -13,7 +13,6 @@ import (
 func main() {
 	database := db.InitDB()
 
-	// 1. モデルの反映
 	database.AutoMigrate(
 		&model.User{},
 		&model.Rank{},
@@ -25,9 +24,6 @@ func main() {
 		&model.Template{},
 	)
 
-	// 2. ダミーデータの投入
-	db.Seed(database)
-
 	e := echo.New()
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"http://localhost:3000"},
@@ -35,7 +31,6 @@ func main() {
 		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, "X-User-ID"},
 	}))
 
-	// 3. ルーティングの登録
 	e.GET("/", func(c echo.Context) error {
 		return c.String(http.StatusOK, "Echoサーバーへようこそ！")
 	})

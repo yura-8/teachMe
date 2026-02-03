@@ -149,6 +149,7 @@ export default function MailConfirmPage() {
     const email = toEmailInput.trim().toLowerCase();
     return recipients.find((r) => r.email.trim().toLowerCase() === email);
   }, [recipients, toEmailInput]);
+  
 
   const avatarUrl =
     selectedRecipient?.avatar_url || "https://api.dicebear.com/7.x/pixel-art/svg?seed=Teacher";
@@ -591,11 +592,7 @@ export default function MailConfirmPage() {
       alert("送信元が未保存です。先に「保存」を押してください。");
       return;
     }
-    if (!signatureInput.trim()) {
-      alert("署名が空です。入力してください。");
-      return;
-    }
-
+    
     const fullMessage = `${body}\n\n${signatureInput}`;
 
     const payload = {
@@ -917,7 +914,7 @@ export default function MailConfirmPage() {
 
                         <div className="mt-4">
                           <button
-                            className="h-11 px-4 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50"
+                            className="h-11 px-4 rounded-xl bg-amber-100 text-slate-800 font-semibold hover:bg-amber-200 transition"
                             onClick={confirmSaveRecipient}
                             disabled={busy}
                             type="button"
