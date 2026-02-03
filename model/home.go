@@ -7,6 +7,7 @@ import (
 type User struct {
 	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	Name      string    `gorm:"size:255;not null" json:"name"`
+	Email     string    `gorm:"size:255;uniqueIndex;not null" json:"email"`
 	AvatarURL string    `gorm:"size:255" json:"avatar_url"`
 	RankID    uint64    `gorm:"not null" json:"rank_id"`
 	CreatedAt time.Time `json:"created_at"`
@@ -44,7 +45,7 @@ type Vocabulary struct {
 type SignatureList struct {
 	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	Content   string    `gorm:"type:text;not null" json:"content"`
-	UserID    uint64    `gorm:"not null;index:idx_user_sig,unique" json:"user_id"`
+	UserID    uint64    `gorm:"not null" json:"user_id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
