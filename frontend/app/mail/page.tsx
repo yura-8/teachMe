@@ -127,6 +127,24 @@ export default function MailConfirmPage() {
   const [body, setBody] = useState("ここに生成された文章が入ります。適宜手直ししてください。");
   const [subject, setSubject] = useState("");
 
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem("mail_draft_data");
+      if (stored) {
+        const data = JSON.parse(stored);
+        if (data.subject) setSubject(data.subject);
+        if (data.body) setBody(data.body);
+        if (data.to) setToEmailInput(data.to);
+        if (data.from) setFromEmailInput(data.from);
+        
+        // 読み込み後はクリアして、リロード時の誤作動を防ぐ（お好みでコメントアウト可）
+        sessionStorage.removeItem("mail_draft_data");
+      }
+    } catch (e) {
+      console.error("Failed to load draft from session storage", e);
+    }
+  }, []);
+
   // UI Toggles
   const [openTo, setOpenTo] = useState(false);
   const [openFrom, setOpenFrom] = useState(false);
@@ -189,9 +207,9 @@ export default function MailConfirmPage() {
     setRecipients([]);
     setMyEmails([]);
     setSignatures([]);
-    setToEmailInput("");
-    setFromEmailInput(userEmail);
-    setSignatureInput("");
+    // setToEmailInput(""); 
+    // setFromEmailInput(userEmail); // 後で制御する
+    // setSignatureInput("");
     setHistory([]);
 
     try {
@@ -230,13 +248,19 @@ export default function MailConfirmPage() {
       }
 
       setRecipients(Array.isArray(emailsData) ? emailsData : []);
-      setMyEmails(finalMyEmails); // 保存済みのデータを含めてセット
+      setMyEmails(finalMyEmails);
       setSignatures(Array.isArray(sigsData) ? sigsData : []);
 
-      if (Array.isArray(emailsData) && emailsData.length > 0) setToEmailInput(emailsData[0].email);
-      // userEmail があるので、setFromEmailInput(userEmail) が優先される
+      if (!toEmailInput && Array.isArray(emailsData) && emailsData.length > 0) {
+        setToEmailInput(emailsData[0].email);
+      }
+      if (!fromEmailInput) {
+        setFromEmailInput(userEmail);
+      }
       
-      if (Array.isArray(sigsData) && sigsData.length > 0) setSignatureInput(sigsData[0].content);
+      if (!signatureInput && Array.isArray(sigsData) && sigsData.length > 0) {
+        setSignatureInput(sigsData[0].content);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -509,12 +533,51 @@ export default function MailConfirmPage() {
               <div className={styles.historyList}>
                 {history.map((m) => (
                   <div key={m.id} className={styles.historyItem}>
-                    <div className={styles.historyDate}>{new Date(m.created_at).toLocaleString()}</div>
-                    <div style={{fontWeight:600}}>To: {m.to_email || "不明"}</div>
-                    <div style={{whiteSpace:'pre-wrap', marginTop:4, color:'#555'}}>{m.content.slice(0, 60)}...</div>
+                    <div className={styles.historyDate}>
+                      {new Date(m.created_at).toLocaleString()}
+                    </div>
+
+                    {/* Fromの表示 */}
+                    <div style={{ fontSize: 12, color: "#666", marginBottom: 2 }}>
+                      From: {m.from_email || "不明"}
+                    </div>
+
+                    <div style={{ fontSize: 12, color: "#666", marginBottom: 2 }}>
+                      To: {m.to_email || "不明"}
+                    </div>
+
+                    {/* 折りたたみ表示 */}
+                    <details style={{ marginTop: 4 }}>
+                      <summary
+                        style={{
+                          cursor: "pointer",
+                          color: "#555",
+                          fontSize: "13px",
+                          userSelect: "none",
+                        }}
+                      >
+                        {m.content.split("\n")[0].slice(0, 40)}...{" "}
+                        <span style={{ fontSize: 10, color: "#888" }}>(詳細)</span>
+                      </summary>
+                      <div
+                        style={{
+                          whiteSpace: "pre-wrap",
+                          marginTop: 4,
+                          color: "#333",
+                          fontSize: "13px",
+                          padding: "8px",
+                          background: "#f9f9f9",
+                          borderRadius: "4px",
+                        }}
+                      >
+                        {m.content}
+                      </div>
+                    </details>
                   </div>
                 ))}
-                {!historyLoading && history.length === 0 && <div className={styles.textSmall}>履歴なし</div>}
+                {!historyLoading && history.length === 0 && (
+                  <div className={styles.textSmall}>履歴なし</div>
+                )}
               </div>
             </div>
           )}
