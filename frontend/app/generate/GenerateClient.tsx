@@ -219,11 +219,10 @@ export default function GenerateClient() {
 
       const maybeSubject =
         typeof data?.subject === "string" ? (data.subject as string) : "";
-      const maybeBody = typeof data?.body === "string" ? (data.body as string) : "";
-      if (!useGemini) {
-        setSubject(maybeSubject);
-        setBody(maybeBody);
-      }
+      const maybeBody =
+        typeof data?.body === "string" ? (data.body as string) : "";
+      setSubject(maybeSubject);
+      setBody(maybeBody);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -324,13 +323,7 @@ export default function GenerateClient() {
             </Button>
           </form>
 
-          {useGemini && resultJson && !error ? (
-            <div className="rounded-2xl border border-zinc-900/10 bg-white px-4 py-3 text-sm text-zinc-900/70">
-              Gemini モードでは JSON の確認のみできます。設定 → JSON確認 を開いてください。
-            </div>
-          ) : null}
-
-          {!useGemini && (subject || body) ? (
+          {subject || body ? (
             <div className="grid gap-2">
               <div className="rounded-2xl border border-zinc-900/10 bg-white px-4 py-3">
                 <div className="text-xs font-semibold text-zinc-900/60">
