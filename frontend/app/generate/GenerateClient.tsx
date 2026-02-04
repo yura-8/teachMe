@@ -33,6 +33,7 @@ type EmailList = {
   user_id: number;
   email: string;
   name?: string;
+  avatar_url?: string;
 };
 
 export default function GenerateClient() {
@@ -43,7 +44,9 @@ export default function GenerateClient() {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const [users, setUsers] = useState<User[]>([]);
-  const [userId, setUserId] = useState<string>("");
+  const [sessionEmail, setSessionEmail] = useState<string>("");
+  const [senderUserId, setSenderUserId] = useState<string>("");
+  const [recipientUserId, setRecipientUserId] = useState<string>("");
 
   const [myEmailLists, setMyEmailLists] = useState<MyEmailList[]>([]);
   const [myEmailListId, setMyEmailListId] = useState<string>("");
@@ -58,16 +61,22 @@ export default function GenerateClient() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const selectedUser = users.find((u) => String(u.id) === userId) ?? null;
+  const selectedSenderUser =
+    users.find((u) => String(u.id) === senderUserId) ?? null;
+  const selectedRecipientUser =
+    users.find((u) => String(u.id) === recipientUserId) ?? null;
   const selectedMyEmailList =
     myEmailLists.find((m) => String(m.id) === myEmailListId) ?? null;
   const selectedEmailList =
     emailLists.find((m) => String(m.id) === emailListId) ?? null;
 
   const avatarSrc =
-    selectedUser?.avatar_url && selectedUser.avatar_url.trim() !== ""
-      ? selectedUser.avatar_url
-      : defaultAvatar;
+    selectedEmailList?.avatar_url && selectedEmailList.avatar_url.trim() !== ""
+      ? selectedEmailList.avatar_url
+      : selectedRecipientUser?.avatar_url &&
+          selectedRecipientUser.avatar_url.trim() !== ""
+        ? selectedRecipientUser.avatar_url
+        : defaultAvatar;
 
   useEffect(() => {
     let cancelled = false;
@@ -78,8 +87,6 @@ export default function GenerateClient() {
         if (!res.ok) return;
         if (cancelled) return;
         setUsers(data);
-        // Default: no user selected (allows null IDs end-to-end).
-        setUserId("");
       } catch {
         // ignore; user can still type prompt and see errors on submit
       }
@@ -90,7 +97,37 @@ export default function GenerateClient() {
   }, []);
 
   useEffect(() => {
-    if (!userId) {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/session");
+        if (!res.ok) return;
+        const data = (await res.json()) as { user?: { email?: string } };
+        if (cancelled) return;
+        setSessionEmail(data?.user?.email ?? "");
+      } catch {
+        // ignore (manual selection will still work)
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!users.length || !sessionEmail || senderUserId) return;
+    const me = users.find((u) => u.email === sessionEmail);
+    if (me) setSenderUserId(String(me.id));
+  }, [users, sessionEmail, senderUserId]);
+
+  useEffect(() => {
+    if (!users.length || recipientUserId) return;
+    const firstOther = users.find((u) => String(u.id) !== senderUserId);
+    if (firstOther) setRecipientUserId(String(firstOther.id));
+  }, [users, senderUserId, recipientUserId]);
+
+  useEffect(() => {
+    if (!senderUserId) {
       setMyEmailLists([]);
       setMyEmailListId("");
       setEmailLists([]);
@@ -101,8 +138,8 @@ export default function GenerateClient() {
     (async () => {
       try {
         const [myRes, emailRes] = await Promise.all([
-          fetch(`/api/my-email-lists?userId=${encodeURIComponent(userId)}`),
-          fetch(`/api/email-lists?userId=${encodeURIComponent(userId)}`),
+          fetch(`/api/my-email-lists?userId=${encodeURIComponent(senderUserId)}`),
+          fetch(`/api/email-lists?userId=${encodeURIComponent(senderUserId)}`),
         ]);
 
         const [myData, emailData] = (await Promise.all([
@@ -113,7 +150,11 @@ export default function GenerateClient() {
         if (cancelled) return;
         if (myRes.ok) {
           setMyEmailLists(myData);
-          setMyEmailListId("");
+          const preferred =
+            sessionEmail && Array.isArray(myData)
+              ? myData.find((m) => m.email === sessionEmail)
+              : undefined;
+          setMyEmailListId(preferred ? String(preferred.id) : "");
         }
         if (emailRes.ok) {
           setEmailLists(emailData);
@@ -126,7 +167,13 @@ export default function GenerateClient() {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [senderUserId, sessionEmail]);
+
+  useEffect(() => {
+    if (!selectedRecipientUser) return;
+    const match = emailLists.find((m) => m.email === selectedRecipientUser.email);
+    if (match) setEmailListId(String(match.id));
+  }, [recipientUserId, selectedRecipientUser, emailLists]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -138,8 +185,10 @@ export default function GenerateClient() {
     setBody("");
 
     try {
-      if (!userId || !myEmailListId || !emailListId) {
-        setError("User / MyEmailList / EmailList を選択してください（アイコンから設定）");
+      if (!senderUserId || !myEmailListId || !emailListId) {
+        setError(
+          "MyEmailList（自分のEmail） / 宛先（User / Email）を選択してください（アイコンから選択）",
+        );
         return;
       }
 
@@ -147,7 +196,7 @@ export default function GenerateClient() {
         prompt,
         useGemini,
         level,
-        userId: Number(userId),
+        userId: Number(senderUserId),
         emailListId: Number(emailListId),
         myEmailListId: Number(myEmailListId),
       };
@@ -199,7 +248,7 @@ export default function GenerateClient() {
         <CardContent className="grid gap-4 p-5">
           <div className="relative grid place-items-center gap-2 py-2">
             <div className="pointer-events-none absolute top-2 text-base font-semibold text-zinc-900/80">
-              {selectedUser?.name ?? "User"}
+              {selectedRecipientUser?.name ?? "宛先（User）"}
             </div>
 
               <button
@@ -268,7 +317,7 @@ export default function GenerateClient() {
 
             <Button
               type="submit"
-              disabled={loading || !userId || !myEmailListId || !emailListId}
+              disabled={loading || !senderUserId || !myEmailListId || !emailListId}
               size="lg"
             >
               {loading ? "生成中..." : "生成する"}
@@ -394,30 +443,14 @@ export default function GenerateClient() {
               </Button>
             </CardHeader>
 
-            <CardContent className="grid max-h-[80vh] gap-3 overflow-auto pb-6">
-                <div className="space-y-1">
-                  <Label htmlFor="userId">User（ユーザー名）</Label>
-                  <Select
-                    id="userId"
-                    value={userId}
-                    onChange={(e) => setUserId(e.target.value)}
-                  >
-                    <option value="">(選択してください)</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={String(u.id)}>
-                        {u.name ?? "User"}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-
+              <CardContent className="grid max-h-[80vh] gap-3 overflow-auto pb-6">
                 <div className="space-y-1">
                   <Label htmlFor="myEmailListId">MyEmailList（自分のEmail）</Label>
                   <Select
                     id="myEmailListId"
                     value={myEmailListId}
                     onChange={(e) => setMyEmailListId(e.target.value)}
-                    disabled={!userId}
+                    disabled={!senderUserId}
                   >
                     <option value="">(選択してください)</option>
                     {myEmailLists.map((m) => (
@@ -429,20 +462,45 @@ export default function GenerateClient() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label htmlFor="emailListId">EmailList（送信先）</Label>
+                  <Label htmlFor="recipientUserId">User（宛先の名前）</Label>
+                  <Select
+                    id="recipientUserId"
+                    value={recipientUserId}
+                    onChange={(e) => setRecipientUserId(e.target.value)}
+                    disabled={!senderUserId}
+                  >
+                    <option value="">(選択してください)</option>
+                    {users
+                      .filter((u) => String(u.id) !== senderUserId)
+                      .map((u) => (
+                      <option key={u.id} value={String(u.id)}>
+                        {u.name ?? "User"}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="emailListId">EmailList（宛先のEmail）</Label>
                   <Select
                     id="emailListId"
                     value={emailListId}
                     onChange={(e) => setEmailListId(e.target.value)}
-                    disabled={!userId}
+                    disabled={!senderUserId || !recipientUserId}
                   >
                     <option value="">(選択してください)</option>
-                    {emailLists.map((m) => (
-                      <option key={m.id} value={String(m.id)}>
-                        {m.email}
-                        {m.name ? `（${m.name}）` : ""}
-                      </option>
-                    ))}
+                    {emailLists
+                      .filter((m) => m.email !== selectedSenderUser?.email)
+                      .filter((m) =>
+                        selectedRecipientUser?.email
+                          ? m.email === selectedRecipientUser.email
+                          : true,
+                      )
+                      .map((m) => (
+                        <option key={m.id} value={String(m.id)}>
+                          {m.email}
+                        </option>
+                      ))}
                   </Select>
                 </div>
 

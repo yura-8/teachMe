@@ -67,6 +67,29 @@ func (h *EmailListHandler) ListEmailLists(c echo.Context) error {
 		userID = n
 	}
 
+	// 宛先は「自分以外のユーザー」から選べるようにするため、
+	// userId が指定されている場合は、全ユーザー（自分以外）を EmailList として自動で用意する。
+	if userID != 0 {
+		var others []model.User
+		if err := h.DB.Where("id <> ?", userID).Order("id asc").Find(&others).Error; err == nil {
+			for _, u := range others {
+				if u.Email == "" {
+					continue
+				}
+				var existing model.EmailList
+				err := h.DB.Where("user_id = ? AND email = ?", userID, u.Email).First(&existing).Error
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					_ = h.DB.Create(&model.EmailList{
+						UserID:    userID,
+						Name:      u.Name,
+						Email:     u.Email,
+						AvatarURL: u.AvatarURL,
+					}).Error
+				}
+			}
+		}
+	}
+
 	var rows []model.EmailList
 	q := h.DB
 	if userID != 0 {
