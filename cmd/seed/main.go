@@ -1,12 +1,15 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"time"
 
 	"teachMe/db"
 	"teachMe/model"
+
+	"gorm.io/gorm"
 )
 
 /*
@@ -25,13 +28,13 @@ import (
   export DB_SOURCE='postgresql://user:password@localhost:5432/teachme?sslmode=disable'
   go run cmd/seed/main.go
 
-このプログラムは、POST /generate に渡すための ID（userId/emailListId/myEmailListId）を出力します。
-  POST http://localhost:8080/generate
+このプログラムは、POST /api/generate に渡すための ID（userId/emailListId/myEmailListId）を出力します。
+  POST http://localhost:8080/api/generate
 */
 
 // Seed for local/dev:
 // - creates a minimal set of records to test text generation + DB persistence
-// - prints IDs you can use when calling POST /generate
+// - prints IDs you can use when calling POST /api/generate
 func main() {
 	database := db.InitDB()
 
@@ -71,76 +74,194 @@ func main() {
 		log.Fatalf("load rank failed: %v", err)
 	}
 
-	// 2) User (unique by email)
-	userEmail := "seed.user@example.com"
-	avatarURL := "/business_man.png"
-	var user model.User
-	if err := database.Where("email = ?", userEmail).First(&user).Error; err != nil {
-		user = model.User{
-			Name:      "Seed User",
-			Email:     userEmail,
-			AvatarURL: avatarURL,
-			RankID:    rank.ID,
-		}
-		if err := database.Create(&user).Error; err != nil {
-			log.Fatalf("create user failed: %v", err)
-		}
+	type seedRecipient struct {
+		Name      string
+		Email     string
+		AvatarURL string
+	}
+	type seedUser struct {
+		Name       string
+		Email      string
+		AvatarURL  string
+		MyEmails   []string
+		Recipients []seedRecipient
 	}
 
-	// 3) MyEmailList (sender identity)
-	myEmail := "me@example.com"
-	var my model.MyEmailList
-	if err := database.Where("user_id = ? AND email = ?", user.ID, myEmail).First(&my).Error; err != nil {
-		my = model.MyEmailList{
-			UserID: user.ID,
-			Email:  myEmail,
-		}
-		if err := database.Create(&my).Error; err != nil {
-			log.Fatalf("create my_email_list failed: %v", err)
-		}
+	seedUsers := []seedUser{
+		{
+			Name:      "Alice Seed",
+			Email:     "alice.seed@example.com",
+			AvatarURL: "/business_man.png",
+			MyEmails: []string{
+				"alice.seed@example.com",
+				"alice.seed+univ@example.com",
+			},
+			Recipients: []seedRecipient{
+				{Name: "田中教授", Email: "tanaka.prof@example.com", AvatarURL: "/business_man_angry.png"},
+				{Name: "鈴木TA", Email: "suzuki.ta@example.com", AvatarURL: "/business_man.png"},
+				{Name: "事務局", Email: "office@example.com", AvatarURL: "/business_man.png"},
+			},
+		},
+		{
+			Name:      "Bob Seed",
+			Email:     "bob.seed@example.com",
+			AvatarURL: "/business_man_angry.png",
+			MyEmails: []string{
+				"bob.seed@example.com",
+			},
+			Recipients: []seedRecipient{
+				{Name: "山田教授", Email: "yamada.prof@example.com", AvatarURL: "/business_man.png"},
+				{Name: "佐藤TA", Email: "sato.ta@example.com", AvatarURL: "/business_man.png"},
+			},
+		},
+		{
+			Name:      "Carol Seed",
+			Email:     "carol.seed@example.com",
+			AvatarURL: "/business_man.png",
+			MyEmails: []string{
+				"carol.seed@example.com",
+			},
+			Recipients: []seedRecipient{
+				{Name: "中村教授", Email: "nakamura.prof@example.com", AvatarURL: "/business_man_angry.png"},
+				{Name: "学務係", Email: "student-affairs@example.com", AvatarURL: "/business_man.png"},
+			},
+		},
 	}
 
-	// 4) EmailList (recipient)
-	recipientEmail := "recipient@example.com"
-	var recipient model.EmailList
-	if err := database.Where("user_id = ? AND email = ?", user.ID, recipientEmail).First(&recipient).Error; err != nil {
-		recipient = model.EmailList{
-			UserID:    user.ID,
-			Name:      "Test Recipient",
-			Email:     recipientEmail,
-			AvatarURL: avatarURL,
+	ensureUser := func(u seedUser) model.User {
+		var user model.User
+		err := database.Where("email = ?", u.Email).First(&user).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			user = model.User{
+				Name:      u.Name,
+				Email:     u.Email,
+				AvatarURL: u.AvatarURL,
+				RankID:    rank.ID,
+			}
+			if err := database.Create(&user).Error; err != nil {
+				log.Fatalf("create user (%s) failed: %v", u.Email, err)
+			}
+			return user
 		}
-		if err := database.Create(&recipient).Error; err != nil {
-			log.Fatalf("create email_list failed: %v", err)
+		if err != nil {
+			log.Fatalf("load user (%s) failed: %v", u.Email, err)
 		}
+
+		user.Name = u.Name
+		user.AvatarURL = u.AvatarURL
+		user.RankID = rank.ID
+		if err := database.Save(&user).Error; err != nil {
+			log.Fatalf("update user (%s) failed: %v", u.Email, err)
+		}
+		return user
+	}
+
+	ensureMyEmail := func(userID uint64, email string) model.MyEmailList {
+		var row model.MyEmailList
+		err := database.Where("user_id = ? AND email = ?", userID, email).First(&row).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			row = model.MyEmailList{UserID: userID, Email: email}
+			if err := database.Create(&row).Error; err != nil {
+				log.Fatalf("create my_email_list (%d,%s) failed: %v", userID, email, err)
+			}
+			return row
+		}
+		if err != nil {
+			log.Fatalf("load my_email_list (%d,%s) failed: %v", userID, email, err)
+		}
+		return row
+	}
+
+	ensureRecipient := func(userID uint64, r seedRecipient) model.EmailList {
+		var row model.EmailList
+		err := database.Where("user_id = ? AND email = ?", userID, r.Email).First(&row).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			row = model.EmailList{
+				UserID:    userID,
+				Name:      r.Name,
+				Email:     r.Email,
+				AvatarURL: r.AvatarURL,
+			}
+			if err := database.Create(&row).Error; err != nil {
+				log.Fatalf("create email_list (%d,%s) failed: %v", userID, r.Email, err)
+			}
+			return row
+		}
+		if err != nil {
+			log.Fatalf("load email_list (%d,%s) failed: %v", userID, r.Email, err)
+		}
+
+		row.Name = r.Name
+		row.AvatarURL = r.AvatarURL
+		if err := database.Save(&row).Error; err != nil {
+			log.Fatalf("update email_list (%d,%s) failed: %v", userID, r.Email, err)
+		}
+		return row
 	}
 
 	// Optional data (not strictly required by /generate, but useful for future features)
-	{
-		var tplCount int64
-		database.Model(&model.Template{}).
-			Where("user_id = ? AND email_list_id = ? AND my_email_list_id = ?", user.ID, recipient.ID, my.ID).
-			Count(&tplCount)
-		if tplCount == 0 {
-			tpl := model.Template{
-				UserID:        user.ID,
-				EmailListID:   recipient.ID,
-				MyEmailListID: my.ID,
-				Content:       "Hello {{name}},\n\nThanks for your email.\n\nBest regards,\n{{me}}",
-				CreatedAt:     time.Now(),
-				UpdatedAt:     time.Now(),
+	type idsForGenerate struct {
+		UserID        uint64
+		MyEmailListID uint64
+		EmailListID   uint64
+	}
+	var examples []idsForGenerate
+
+	for _, su := range seedUsers {
+		u := ensureUser(su)
+
+		var myFirst model.MyEmailList
+		for i, me := range su.MyEmails {
+			row := ensureMyEmail(u.ID, me)
+			if i == 0 {
+				myFirst = row
 			}
-			_ = database.Create(&tpl).Error
 		}
+
+		var recipientFirst model.EmailList
+		for i, r := range su.Recipients {
+			row := ensureRecipient(u.ID, r)
+			if i == 0 {
+				recipientFirst = row
+			}
+		}
+
+		// Template: create only if missing for (user, first recipient, first myEmail)
+		if u.ID != 0 && myFirst.ID != 0 && recipientFirst.ID != 0 {
+			var tplCount int64
+			database.Model(&model.Template{}).
+				Where("user_id = ? AND email_list_id = ? AND my_email_list_id = ?", u.ID, recipientFirst.ID, myFirst.ID).
+				Count(&tplCount)
+			if tplCount == 0 {
+				tpl := model.Template{
+					UserID:        u.ID,
+					EmailListID:   recipientFirst.ID,
+					MyEmailListID: myFirst.ID,
+					Content:       "Hello {{name}},\n\nThanks for your email.\n\nBest regards,\n{{me}}",
+					CreatedAt:     time.Now(),
+					UpdatedAt:     time.Now(),
+				}
+				_ = database.Create(&tpl).Error
+			}
+		}
+
+		examples = append(examples, idsForGenerate{
+			UserID:        u.ID,
+			MyEmailListID: myFirst.ID,
+			EmailListID:   recipientFirst.ID,
+		})
 	}
 
-	fmt.Println("✅ Seed completed. Use these IDs for POST /generate:")
-	fmt.Printf("userId=%d\n", user.ID)
-	fmt.Printf("emailListId=%d\n", recipient.ID)
-	fmt.Printf("myEmailListId=%d\n", my.ID)
+	fmt.Println("✅ Seed completed. Example IDs for POST /api/generate:")
+	for _, ex := range examples {
+		fmt.Printf("userId=%d emailListId=%d myEmailListId=%d\n", ex.UserID, ex.EmailListID, ex.MyEmailListID)
+	}
 	fmt.Println()
 	fmt.Println("Example:")
-	fmt.Println(`curl -X POST http://localhost:8080/generate \`)
+	fmt.Println(`curl -X POST http://localhost:8080/api/generate \`)
 	fmt.Println(`  -H 'Content-Type: application/json' \`)
-	fmt.Printf("  -d '{\"prompt\":\"hi\",\"useGemini\":false,\"userId\":%d,\"emailListId\":%d,\"myEmailListId\":%d}'\n", user.ID, recipient.ID, my.ID)
+	if len(examples) > 0 {
+		ex := examples[0]
+		fmt.Printf("  -d '{\"prompt\":\"hi\",\"useGemini\":false,\"userId\":%d,\"emailListId\":%d,\"myEmailListId\":%d}'\n", ex.UserID, ex.EmailListID, ex.MyEmailListID)
+	}
 }
