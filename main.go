@@ -22,6 +22,7 @@ func main() {
 		&model.SignatureList{},
 		&model.SentMail{},
 		&model.Template{},
+		&model.GenerationHistory{},
 	)
 
 	// Echoのインスタンスを作成
@@ -39,8 +40,25 @@ func main() {
 		database.Find(&users) // DBから全ユーザー取得
 		return c.JSON(http.StatusOK, users)
 	})
+	// フロント向け（CORS回避のためにNext側でプロキシする想定）
+	e.GET("/api/users", func(c echo.Context) error {
+		var users []model.User
+		if err := database.Order("id asc").Find(&users).Error; err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		}
+		return c.JSON(http.StatusOK, users)
+	})
+
 	userHandler := handler.NewUserHandler(database)
 	e.POST("/api/users/login", userHandler.LoginUser)
+	// 文章生成をするエンドポイント
+	generationHandler := handler.NewGenerationHandler(database)
+	e.POST("/api/generate", generationHandler.TextGenerationHandler)
+
+	emailListHandler := handler.NewEmailListHandler(database)
+	e.GET("/api/my_email_lists", emailListHandler.ListMyEmailLists)
+	e.GET("/api/email_lists", emailListHandler.ListEmailLists)
+
 	// サーバー起動
 	e.Logger.Fatal(e.Start(":8080"))
 }
