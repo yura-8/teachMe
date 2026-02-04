@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -28,6 +29,19 @@ func (h *EmailListHandler) ListMyEmailLists(c echo.Context) error {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid userId"})
 		}
 		userID = n
+	}
+
+	// Googleログイン等で作成されたユーザーは MyEmailList が空のままになることがあるため、
+	// userId が指定されている場合は「ユーザー自身のメール」を MyEmailList に自動で用意する。
+	if userID != 0 {
+		var user model.User
+		if err := h.DB.First(&user, userID).Error; err == nil && user.Email != "" {
+			var existing model.MyEmailList
+			err := h.DB.Where("user_id = ? AND email = ?", user.ID, user.Email).First(&existing).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				_ = h.DB.Create(&model.MyEmailList{UserID: user.ID, Email: user.Email}).Error
+			}
+		}
 	}
 
 	var rows []model.MyEmailList
