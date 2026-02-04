@@ -304,7 +304,7 @@ export default function GenerateClient() {
 
           <form onSubmit={onSubmit} className="grid gap-3">
             <div className="space-y-1">
-              <Label htmlFor="prompt">本音（言い訳）</Label>
+              <Label htmlFor="prompt">本音</Label>
               <Textarea
                 id="prompt"
                 value={prompt}
