@@ -1,0 +1,292 @@
+/* ===== ページ全体（スクロール無しで収める） ===== */
+.generateWrapper {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 18px 16px;
+  background-image: linear-gradient(to top, #fddb92 0%, #d1fdff 100%);
+  overflow: hidden; /* ページスクロール抑制 */
+}
+
+/* 2カラム（左:設定 / 右:生成UI） */
+.layout {
+  width: min(1100px, 100%);
+  height: min(720px, calc(100vh - 36px));
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 14px;
+}
+
+.sidePanel {
+  height: 100%;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow:
+    0 1px 2px rgba(60, 64, 67, 0.12),
+    0 8px 24px rgba(60, 64, 67, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sideTitle {
+  font-family: Roboto, arial, sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.label {
+  font-weight: 600;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.select {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  background: #fff;
+  padding: 10px 10px;
+  font-family: Roboto, arial, sans-serif;
+  font-size: 14px;
+  outline: none;
+  color: rgba(0, 0, 0, 0.75);
+}
+
+.select:focus {
+  border-color: rgba(0, 0, 0, 0.32);
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.06);
+}
+
+.details {
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.detailsSummary {
+  cursor: pointer;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.65);
+  user-select: none;
+}
+
+.mainColumn {
+  height: 100%;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
+  padding: 16px 18px;
+  box-shadow:
+    0 1px 2px rgba(60, 64, 67, 0.12),
+    0 8px 24px rgba(60, 64, 67, 0.1);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  gap: 12px;
+}
+
+/* 上から: 人のイラスト */
+.avatarArea {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+}
+
+.avatarRing {
+  width: clamp(140px, 18vh, 210px);
+  height: clamp(140px, 18vh, 210px);
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  padding: 8px;
+}
+
+.avatarImg {
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  object-fit: cover;
+  display: block;
+  background: #fff;
+}
+
+.avatarCaption {
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.7);
+}
+
+/* 反省度スライダー */
+.sliderArea {
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.02);
+  padding: 10px 12px;
+}
+
+.sliderHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.sliderLabel {
+  font-weight: 700;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.75);
+}
+
+.sliderValue {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.slider {
+  width: 100%;
+}
+
+/* 文章入力ボックス */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.promptBox {
+  width: 100%;
+  resize: none;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  background: #fff;
+  padding: 12px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 14px;
+  line-height: 1.55;
+  outline: none;
+  color: rgba(0, 0, 0, 0.75);
+  min-height: 120px;
+  max-height: 220px;
+}
+
+.promptBox:focus {
+  border-color: rgba(0, 0, 0, 0.32);
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.06);
+}
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.8);
+}
+
+/* ===== ボタン（loginのGoogleボタンを参考） ===== */
+.generateButton {
+  position: relative;
+  user-select: none;
+  appearance: none;
+  background-color: #fff;
+  border: 1px solid #dadce0;
+  border-radius: 9999px;
+  box-sizing: border-box;
+  color: #1f1f1f;
+  cursor: pointer;
+  font-family: Roboto, arial, sans-serif;
+  font-size: 18px;
+  height: 56px;
+  padding: 0 20px;
+  transition: background-color 0.218s, box-shadow 0.218s, opacity 0.218s;
+}
+
+.generateButton:hover:not(:disabled) {
+  box-shadow:
+    0 1px 2px rgba(60, 64, 67, 0.3),
+    0 1px 3px 1px rgba(60, 64, 67, 0.15);
+}
+
+.generateButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.errorBox {
+  margin-top: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(210, 20, 20, 0.2);
+  background: rgba(210, 20, 20, 0.06);
+  padding: 12px;
+}
+
+.errorTitle {
+  font-weight: 700;
+  color: rgba(210, 20, 20, 0.9);
+}
+
+.errorMessage {
+  margin-top: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+  color: rgba(121, 30, 30, 0.9);
+}
+
+.resultBox {
+  margin-top: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 12px;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.resultMeta {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.03);
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.75);
+}
+
+.resultText {
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  max-height: 160px;
+  overflow: auto;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    height: min(820px, calc(100vh - 36px));
+  }
+}
+
