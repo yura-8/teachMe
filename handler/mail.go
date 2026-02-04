@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,18 +24,14 @@ type SentMailWithAddress struct {
 func getUserID(c echo.Context, db *gorm.DB) uint64 {
 	email := c.Request().Header.Get("X-User-Email")
 	if email == "" {
-		// Emailヘッダーが無い場合は認証不可
 		return 0
 	}
 
 	var user model.User
-	// 1. Emailで検索
 	if err := db.Where("email = ?", email).First(&user).Error; err == nil {
 		return user.ID
 	}
 
-	// 2. 見つからなければ、新規ユーザーとして作成してしまう
-	// 名前はとりあえず @ の前を使う
 	name := strings.Split(email, "@")[0]
 	newUser := model.User{
 		Email:     email,
@@ -44,7 +41,7 @@ func getUserID(c echo.Context, db *gorm.DB) uint64 {
 	}
 
 	if err := db.Create(&newUser).Error; err != nil {
-		// 作成失敗
+		fmt.Printf("CreateUser Error: %v\n", err)
 		return 0
 	}
 
@@ -53,7 +50,6 @@ func getUserID(c echo.Context, db *gorm.DB) uint64 {
 
 // InitMailRoutes ルーティング登録
 func InitMailRoutes(e *echo.Echo, db *gorm.DB) {
-	// 全ハンドラーに db を渡す
 	e.GET("/emails", GetEmailList(db))
 	e.GET("/my-emails", GetMyEmails(db))
 	e.GET("/signatures", GetSignatures(db))
@@ -165,7 +161,7 @@ func GetSentMails(db *gorm.DB) echo.HandlerFunc {
 	}
 }
 
-// ---------- CREATEs ----------
+// ---------- CREATEs (修正版: Soft Delete対応) ----------
 type createEmailReq struct {
 	Name      string `json:"name"`
 	Email     string `json:"email"`
@@ -191,13 +187,30 @@ func CreateEmail(db *gorm.DB) echo.HandlerFunc {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "email は必須です"})
 		}
 
+		// ★変更: Unscoped() で削除済みも含めて検索
 		var existing model.EmailList
-		if err := db.Where("user_id = ? AND lower(email) = lower(?)", userID, email).First(&existing).Error; err == nil {
-			return c.JSON(http.StatusConflict, map[string]string{"error": "既に登録されています"})
-		} else if err != gorm.ErrRecordNotFound {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "宛先の重複チェックに失敗しました"})
+		if err := db.Unscoped().Where("user_id = ? AND lower(email) = lower(?)", userID, email).First(&existing).Error; err == nil {
+			// レコードが存在する場合（削除済み含む）
+
+			// もしIDはあるけどDeletedAtが入っていない（＝現在有効）なら重複エラー
+			// ※GORMのモデル定義に依存するため、念のため普通の検索で「生きているか」確認
+			var active model.EmailList
+			if err := db.Where("id = ?", existing.ID).First(&active).Error; err == nil {
+				return c.JSON(http.StatusConflict, map[string]string{"error": "既に登録されています"})
+			}
+
+			// ここに来る＝「削除済みデータがある」。なので復活させる（Update）
+			if err := db.Model(&existing).Unscoped().Updates(map[string]interface{}{
+				"deleted_at": nil, // 復活
+				"name":       name,
+				"avatar_url": avatar,
+			}).Error; err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("復元失敗: %s", err.Error())})
+			}
+			return c.JSON(http.StatusCreated, existing)
 		}
 
+		// 全く新規の場合は作成
 		record := model.EmailList{
 			UserID:    userID,
 			Name:      name,
@@ -205,7 +218,7 @@ func CreateEmail(db *gorm.DB) echo.HandlerFunc {
 			AvatarURL: avatar,
 		}
 		if err := db.Create(&record).Error; err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "データの保存に失敗しました"})
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("保存失敗: %s", err.Error())})
 		}
 		return c.JSON(http.StatusCreated, record)
 	}
@@ -232,10 +245,18 @@ func CreateMyEmail(db *gorm.DB) echo.HandlerFunc {
 		}
 
 		var existing model.MyEmailList
-		if err := db.Where("user_id = ? AND lower(email) = lower(?)", userID, email).First(&existing).Error; err == nil {
-			return c.JSON(http.StatusConflict, map[string]string{"error": "既に登録されています"})
-		} else if err != gorm.ErrRecordNotFound {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "送信元の重複チェックに失敗しました"})
+		if err := db.Unscoped().Where("user_id = ? AND lower(email) = lower(?)", userID, email).First(&existing).Error; err == nil {
+			var active model.MyEmailList
+			if err := db.Where("id = ?", existing.ID).First(&active).Error; err == nil {
+				return c.JSON(http.StatusConflict, map[string]string{"error": "既に登録されています"})
+			}
+			// 復元
+			if err := db.Model(&existing).Unscoped().Updates(map[string]interface{}{
+				"deleted_at": nil,
+			}).Error; err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("復元失敗: %s", err.Error())})
+			}
+			return c.JSON(http.StatusCreated, existing)
 		}
 
 		record := model.MyEmailList{
@@ -243,7 +264,7 @@ func CreateMyEmail(db *gorm.DB) echo.HandlerFunc {
 			Email:  email,
 		}
 		if err := db.Create(&record).Error; err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "データの保存に失敗しました"})
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("保存失敗: %s", err.Error())})
 		}
 		return c.JSON(http.StatusCreated, record)
 	}
@@ -270,10 +291,18 @@ func CreateSignature(db *gorm.DB) echo.HandlerFunc {
 		}
 
 		var existing model.SignatureList
-		if err := db.Where("user_id = ? AND content = ?", userID, content).First(&existing).Error; err == nil {
-			return c.JSON(http.StatusConflict, map[string]string{"error": "既に登録されています"})
-		} else if err != gorm.ErrRecordNotFound {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "署名の重複チェックに失敗しました"})
+		if err := db.Unscoped().Where("user_id = ? AND content = ?", userID, content).First(&existing).Error; err == nil {
+			var active model.SignatureList
+			if err := db.Where("id = ?", existing.ID).First(&active).Error; err == nil {
+				return c.JSON(http.StatusConflict, map[string]string{"error": "既に登録されています"})
+			}
+			// 復元
+			if err := db.Model(&existing).Unscoped().Updates(map[string]interface{}{
+				"deleted_at": nil,
+			}).Error; err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("復元失敗: %s", err.Error())})
+			}
+			return c.JSON(http.StatusCreated, existing)
 		}
 
 		record := model.SignatureList{
@@ -281,7 +310,7 @@ func CreateSignature(db *gorm.DB) echo.HandlerFunc {
 			Content: content,
 		}
 		if err := db.Create(&record).Error; err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "データの保存に失敗しました"})
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("保存失敗: %s", err.Error())})
 		}
 		return c.JSON(http.StatusCreated, record)
 	}
@@ -302,7 +331,6 @@ func DeleteEmail(db *gorm.DB) echo.HandlerFunc {
 		}
 
 		var target model.EmailList
-		// 自分のデータかチェック (user_id = userID)
 		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&target).Error; err != nil {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "宛先が見つかりません"})
 		}
@@ -421,7 +449,7 @@ func CreateSentMail(db *gorm.DB) echo.HandlerFunc {
 			UserID:        userID,
 		}
 		if err := db.Create(&record).Error; err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "履歴の保存に失敗しました"})
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("履歴保存失敗: %s", err.Error())})
 		}
 
 		return c.JSON(http.StatusCreated, record)
@@ -479,16 +507,13 @@ func CreateTemplate(db *gorm.DB) echo.HandlerFunc {
 		}
 
 		var existing model.Template
-		err := db.Where(
+		db.Where(
 			"user_id = ? AND email_list_id = ? AND my_email_list_id = ? AND content = ?",
 			userID, req.EmailListID, req.MyEmailListID, content,
-		).First(&existing).Error
+		).Limit(1).Find(&existing)
 
-		if err == nil {
+		if existing.ID != 0 {
 			return c.JSON(http.StatusConflict, map[string]string{"error": "既に同じテンプレが登録されています"})
-		}
-		if err != gorm.ErrRecordNotFound {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "重複チェックに失敗しました"})
 		}
 
 		record := model.Template{
@@ -498,7 +523,7 @@ func CreateTemplate(db *gorm.DB) echo.HandlerFunc {
 			Content:       content,
 		}
 		if err := db.Create(&record).Error; err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "テンプレの保存に失敗しました"})
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("テンプレ保存失敗: %s", err.Error())})
 		}
 		return c.JSON(http.StatusCreated, record)
 	}

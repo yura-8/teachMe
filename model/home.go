@@ -26,7 +26,7 @@ type EmailList struct {
 	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID    uint64    `gorm:"not null;index:idx_user_email_list,unique" json:"user_id"`
 	Name      string    `gorm:"size:255" json:"name"`
-	Email     string    `gorm:"size:255;not null" json:"email"`
+	Email     string    `gorm:"size:255;not null;index:idx_user_email_list,unique" json:"email"`
 	AvatarURL string    `gorm:"size:255" json:"avatar_url"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
