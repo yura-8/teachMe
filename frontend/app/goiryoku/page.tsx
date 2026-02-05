@@ -49,9 +49,20 @@ export default function GoiryokuPage() {
         });
 
         if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
+          const raw = await res.text().catch(() => "");
+          let errorData: any = {};
+          try {
+            errorData = raw ? JSON.parse(raw) : {};
+          } catch {
+            errorData = { raw };
+          }
           console.error("API Error Response:", errorData);
-          throw new Error(errorData.error || errorData.details || `API request failed with status ${res.status}`);
+          throw new Error(
+            errorData.error ||
+              errorData.details ||
+              (raw ? raw.slice(0, 200) : "") ||
+              `API request failed with status ${res.status}`,
+          );
         }
 
         const data = await res.json();
