@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +38,8 @@ type EmailList = {
 };
 
 export default function GenerateClient() {
+  const router = useRouter();
+
   const [prompt, setPrompt] = useState("");
   const [useGemini, setUseGemini] = useState(false);
   const [level, setLevel] = useState(3);
@@ -88,7 +91,7 @@ export default function GenerateClient() {
         if (cancelled) return;
         setUsers(data);
       } catch {
-        // ignore; user can still type prompt and see errors on submit
+        // ignore
       }
     })();
     return () => {
@@ -106,7 +109,7 @@ export default function GenerateClient() {
         if (cancelled) return;
         setSessionEmail(data?.user?.email ?? "");
       } catch {
-        // ignore (manual selection will still work)
+        // ignore
       }
     })();
     return () => {
@@ -230,6 +233,17 @@ export default function GenerateClient() {
     }
   }
 
+  const handleGoToMail = () => {
+    const mailData = {
+      subject,
+      body,
+      to: selectedEmailList?.email || "",
+      from: selectedMyEmailList?.email || ""
+    };
+    sessionStorage.setItem("mail_draft_data", JSON.stringify(mailData));
+    router.push("/mail");
+  };
+
   return (
     <div className="mx-auto w-full max-w-[960px]">
         <Card className="w-full overflow-hidden">
@@ -324,23 +338,35 @@ export default function GenerateClient() {
           </form>
 
           {subject || body ? (
-            <div className="grid gap-2">
-              <div className="rounded-2xl border border-zinc-900/10 bg-white px-4 py-3">
-                <div className="text-xs font-semibold text-zinc-900/60">
-                  件名（subject）
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <div className="rounded-2xl border border-zinc-900/10 bg-white px-4 py-3">
+                  <div className="text-xs font-semibold text-zinc-900/60">
+                    件名（subject）
+                  </div>
+                  <div className="mt-1 whitespace-pre-wrap break-words text-sm text-zinc-900">
+                    {subject || "(空)"}
+                  </div>
                 </div>
-                <div className="mt-1 whitespace-pre-wrap break-words text-sm text-zinc-900">
-                  {subject || "(空)"}
+                <div className="rounded-2xl border border-zinc-900/10 bg-white px-4 py-3">
+                  <div className="text-xs font-semibold text-zinc-900/60">
+                    本文（body）
+                  </div>
+                  <pre className="mt-2 max-h-[40vh] overflow-auto whitespace-pre-wrap break-words text-sm text-zinc-900/80">
+                    {body || "(空)"}
+                  </pre>
                 </div>
               </div>
-              <div className="rounded-2xl border border-zinc-900/10 bg-white px-4 py-3">
-                <div className="text-xs font-semibold text-zinc-900/60">
-                  本文（body）
-                </div>
-                <pre className="mt-2 max-h-[40vh] overflow-auto whitespace-pre-wrap break-words text-sm text-zinc-900/80">
-                  {body || "(空)"}
-                </pre>
-              </div>
+
+              {/* ★修正: 色指定を削除してデフォルト（黒）に統一 */}
+              <Button
+                type="button"
+                className="w-full"
+                size="lg"
+                onClick={handleGoToMail}
+              >
+                この内容でメールを作成する
+              </Button>
             </div>
           ) : null}
 
