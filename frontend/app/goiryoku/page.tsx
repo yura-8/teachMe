@@ -3,9 +3,18 @@
 import { useEffect, useRef } from "react";
 import Image from "next/image";
 import styles from "./goiryoku.module.css";
+import PageMenu, { type PageMenuItem } from "@/components/PageMenu";
 
 export default function GoiryokuPage() {
   const isInitialized = useRef(false);
+
+  const menuItems: PageMenuItem[] = [
+    { label: "文章生成へ", href: "/generate" },
+    { label: "メール作成へ", href: "/mail" },
+    { label: "語彙へ", href: "/vocabulary" },
+    { label: "語彙力へ", href: "/goiryoku" },
+    { label: "ログアウト", href: "/logout" },
+  ];
 
   useEffect(() => {
     if (isInitialized.current) return;
@@ -25,7 +34,7 @@ export default function GoiryokuPage() {
       "4": { name: "准教授級", y: "25%" },
       "3": { name: "一般学生級", y: "65%" },
       "2": { name: "アメーバ級", y: "75%" },
-      "1": { name: "入門級", y: "130%" },
+      "1": { name: "入門級", y: "90%" },
     };
 
     generateButton.addEventListener("click", async () => {
@@ -42,27 +51,50 @@ export default function GoiryokuPage() {
       resultArea.style.display = "none";
 
       try {
-        const res = await fetch("/api/vocabulary", {
+        const res = await fetch("/api/goiryokugoiryoku", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text }),
         });
 
-        if (!res.ok) throw new Error("API request failed");
+        if (!res.ok) {
+          const raw = await res.text().catch(() => "");
+          let errorData: any = {};
+          try {
+            errorData = raw ? JSON.parse(raw) : {};
+          } catch {
+            errorData = { raw };
+          }
+          console.error("API Error Response:", errorData);
+          throw new Error(
+            errorData.error ||
+              errorData.details ||
+              (raw ? raw.slice(0, 200) : "") ||
+              `API request failed with status ${res.status}`,
+          );
+        }
 
         const data = await res.json();
         const score = String(data.score || 3);
+        const advice = data.advice || "apiからアドバイスが届いていません"; // フォールバック用
         const rankData = RANK_MAP[score];
 
         // UI更新
         indicator.style.top = rankData.y;
         rankNameDisplay.textContent = rankData.name;
         resultArea.style.display = "block";
-        resultMessage.textContent = `【判定結果】\nあなたは「${rankData.name}」です。`;
+        
+        resultMessage.innerHTML = `
+          <strong>【判定結果】</strong><br>
+          あなたは「<span style="color: #d21414;">${rankData.name}</span>」です。<br><br>
+          <strong>【AIからのアドバイス】</strong><br>
+          ${advice}
+        `;
         
       } catch (err) {
-        console.error(err);
+        console.error("Full error details:", err);
         errorBox.style.display = "block";
+        errorBox.textContent = err instanceof Error ? err.message : "エラーが発生しました";
       } finally {
         generateButton.disabled = false;
         generateButton.textContent = "語彙力を判定する";
@@ -72,6 +104,7 @@ export default function GoiryokuPage() {
 
   return (
     <div className={styles.generateWrapper}>
+      <PageMenu items={menuItems} className="fixed left-4 top-4 z-50" />
       <div className={styles.simpleLayout}>
         <main className={styles.mainColumn}>
           
