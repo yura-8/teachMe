@@ -26,9 +26,11 @@ services:
     image: node:20-alpine
     volumes:
       - ./frontend:/app
+      # Keep node_modules inside the container (avoid host/node ABI mismatch & stale deps)
+      - /app/node_modules
     ports:
       - "3000:3000"
     working_dir: /app
     environment:
       - WATCHPACK_POLLING=true
-    command: sh -c "npm install && npm run dev" # 依存関係をインストールしてから起動
+    command: sh -c "npm ci && npm run dev" # lockfile に基づいて依存関係をインストールしてから起動
