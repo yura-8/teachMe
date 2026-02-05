@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Send, ChevronDown, ChevronUp, Trash2, X } from "lucide-react";
 import styles from "./mail.module.css";
+import PageMenu, { type PageMenuItem } from "@/components/PageMenu";
 
 // --- Types ---
 type Recipient = {
@@ -96,6 +97,13 @@ function applyTemplate(tpl: string, raw: string) {
 }
 
 export default function MailConfirmPage() {
+  const menuItems: PageMenuItem[] = [
+    { label: "文章生成へ", href: "/generate" },
+    { label: "メール作成へ", href: "/mail" },
+    { label: "語彙へ", href: "/vocabulary" },
+    { label: "ログアウト", href: "/logout" },
+  ];
+
   // Provider不要の方法でユーザーEmailを管理
   const [userEmail, setUserEmail] = useState("");
 
@@ -482,6 +490,7 @@ export default function MailConfirmPage() {
   // --- Render ---
   return (
     <div className={styles.wrapper}>
+      <PageMenu items={menuItems} className="fixed left-4 top-4 z-50" />
       <div className={styles.container}>
         
         {/* Header Title (Grid full width) */}
