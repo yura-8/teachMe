@@ -74,12 +74,14 @@ export default function GenerateClient() {
     emailLists.find((m) => String(m.id) === emailListId) ?? null;
 
   const avatarSrc =
-    selectedEmailList?.avatar_url && selectedEmailList.avatar_url.trim() !== ""
-      ? selectedEmailList.avatar_url
-      : selectedRecipientUser?.avatar_url &&
-          selectedRecipientUser.avatar_url.trim() !== ""
-        ? selectedRecipientUser.avatar_url
-        : defaultAvatar;
+    !recipientUserId
+      ? defaultAvatar
+      : selectedEmailList?.avatar_url && selectedEmailList.avatar_url.trim() !== ""
+        ? selectedEmailList.avatar_url
+        : selectedRecipientUser?.avatar_url &&
+            selectedRecipientUser.avatar_url.trim() !== ""
+          ? selectedRecipientUser.avatar_url
+          : defaultAvatar;
 
   useEffect(() => {
     let cancelled = false;
@@ -122,12 +124,6 @@ export default function GenerateClient() {
     const me = users.find((u) => u.email === sessionEmail);
     if (me) setSenderUserId(String(me.id));
   }, [users, sessionEmail, senderUserId]);
-
-  useEffect(() => {
-    if (!users.length || recipientUserId) return;
-    const firstOther = users.find((u) => String(u.id) !== senderUserId);
-    if (firstOther) setRecipientUserId(String(firstOther.id));
-  }, [users, senderUserId, recipientUserId]);
 
   useEffect(() => {
     if (!senderUserId) {
