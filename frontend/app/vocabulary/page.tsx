@@ -13,6 +13,20 @@ interface Vocabulary {
   email_list_id: number;
 }
 
+type SessionResponse = {
+  user?: {
+    email?: string;
+  };
+};
+
+type UserRow = {
+  id: number;
+  email: string;
+  name?: string;
+  avatar_url?: string;
+  rank_id?: number;
+};
+
 interface Professor {
   id: number;
   name: string;
@@ -34,7 +48,8 @@ export default function VocabularyPage() {
   const [vocabList, setVocabList] = useState<Vocabulary[]>([]);
   const [selectedIDs, setSelectedIDs] = useState<number[]>([]);
 
-  const currentUserID = 1; 
+  const [currentUserID, setCurrentUserID] = useState<number | null>(null);
+  const [currentUserError, setCurrentUserError] = useState<string | null>(null);
   const [selectedProfID, setSelectedProfID] = useState(101);
 
   const [isProfMenuOpen, setIsProfMenuOpen] = useState(false);
@@ -42,38 +57,78 @@ export default function VocabularyPage() {
   const [showRankModal, setShowRankModal] = useState(false);
   const [currentRank, setCurrentRank] = useState<{content: string, image_url: string} | null>(null);
   const [lastRankID, setLastRankID] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setCurrentUserError(null);
+        const sessionRes = await fetch("/api/auth/session");
+        const session = (await sessionRes.json().catch(() => ({}))) as SessionResponse;
+        const email = session?.user?.email ?? "";
+        if (!email) {
+          if (!cancelled) {
+            setCurrentUserID(null);
+            setCurrentUserError("ログインしてください（ユーザー情報が取得できません）。");
+          }
+          return;
+        }
+
+        const usersRes = await fetch("/api/users");
+        const users = (await usersRes.json().catch(() => [])) as UserRow[];
+        const me = Array.isArray(users) ? users.find((u) => u.email === email) : undefined;
+        if (!me) {
+          if (!cancelled) {
+            setCurrentUserID(null);
+            setCurrentUserError("ログインユーザーがDBに見つかりませんでした。もう一度ログインしてください。");
+          }
+          return;
+        }
+
+        if (cancelled) return;
+        setCurrentUserID(me.id);
+        setLastRankID(typeof me.rank_id === "number" ? me.rank_id : null);
+      } catch (err) {
+        if (!cancelled) {
+          setCurrentUserID(null);
+          setCurrentUserError(err instanceof Error ? err.message : "ユーザー情報の取得に失敗しました。");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // 語彙一覧を取得
   const fetchVocabularies = async () => {
+    if (!currentUserID) return;
     try {
-      const res = await fetch(`http://localhost:8080/vocabularies?user_id=${currentUserID}`);
-      const data = await res.json();
-      setVocabList(data || []);
+      const res = await fetch(`/api/vocabularies?user_id=${currentUserID}`);
+      const data = await res.json().catch(() => null);
+      setVocabList(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Failed to fetch:", err);
+      setVocabList([]);
     }
   };
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const res = await fetch(`http://localhost:8080/users`); 
-        const users = await res.json();
-        const me = users.find((u: any) => u.id === currentUserID);
-        if (me) {
-          setLastRankID(me.rank_id);
-        }
-      } catch (err) { console.error(err); }
-    };
-    fetchUserData();
     fetchVocabularies();
-  }, []);
+  }, [currentUserID]);
 
   // 新規登録
   const handleRegister = async () => {
     if (!word.trim()) return;
+    if (!currentUserID) {
+      setCurrentUserError("ログインユーザーが未確定のため登録できません。");
+      return;
+    }
     try {
-      const res = await fetch("http://localhost:8080/vocabularies", {
+      setBusy(true);
+      setCurrentUserError(null);
+      const res = await fetch("/api/vocabularies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -82,7 +137,22 @@ export default function VocabularyPage() {
           prof_id: selectedProfID,
         }),
       });
-      const data = await res.json();
+      const raw = await res.text().catch(() => "");
+      let data: any = null;
+      try {
+        data = raw ? JSON.parse(raw) : null;
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok) {
+        const message =
+          (data && (data.error || data.details)) ||
+          (raw ? raw.slice(0, 200) : "") ||
+          `登録に失敗しました (status ${res.status})`;
+        setCurrentUserError(String(message));
+        return;
+      }
       if (res.ok) {
         setWord("");
         fetchVocabularies();
@@ -96,7 +166,12 @@ export default function VocabularyPage() {
           setLastRankID(data.rank.id);
         }
       }
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      setCurrentUserError(err instanceof Error ? err.message : "登録に失敗しました。");
+    } finally {
+      setBusy(false);
+    }
   };
 
   // 削除機能
@@ -108,8 +183,12 @@ export default function VocabularyPage() {
 
   const handleDelete = async () => {
     if (selectedIDs.length === 0) return;
+    if (!currentUserID) {
+      setCurrentUserError("ログインユーザーが未確定のため削除できません。");
+      return;
+    }
     try {
-      const res = await fetch("http://localhost:8080/vocabularies", {
+      const res = await fetch("/api/vocabularies", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -129,8 +208,12 @@ export default function VocabularyPage() {
   // コピー機能
   const handleCopy = async () => {
     if (selectedIDs.length === 0) return;
+    if (!currentUserID) {
+      setCurrentUserError("ログインユーザーが未確定のためコピーできません。");
+      return;
+    }
     try {
-      const res = await fetch("http://localhost:8080/vocabularies/copy", {
+      const res = await fetch("/api/vocabularies/copy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -149,12 +232,11 @@ export default function VocabularyPage() {
   };
 
   const currentProf = professors.find(p => p.id === selectedProfID) || professors[0];
-  const hasAnyVocab = vocabList.length > 0;
+  const hasAnyVocab = Array.isArray(vocabList) && vocabList.length > 0;
 
   return (
     <div className={styles.container}>
       <PageMenu items={menuItems} className="fixed left-4 top-4 z-50" />
-      <main className={styles.mainWrapper}>
       {/* 選択中の教授バッジ & セレクトメニュー */}
       <div className={styles.currentProfSelector}>
         <div 
@@ -199,9 +281,19 @@ export default function VocabularyPage() {
           </div>
           <img src="/piggy_bank.png" alt="貯金箱" className={styles.piggyImg} />
         </div>
-        <Button size="lg" className={styles.registerButton} onClick={handleRegister}>
-          登録する
+        <Button
+          size="lg"
+          className={styles.registerButton}
+          onClick={handleRegister}
+          disabled={busy || !currentUserID || !word.trim()}
+        >
+          {busy ? "登録中..." : "登録する"}
         </Button>
+        {currentUserError ? (
+          <div style={{ marginTop: 12, color: "#a11", fontSize: 12 }}>
+            {currentUserError}
+          </div>
+        ) : null}
       </section>
 
       {/* リスト表示 */}
@@ -247,7 +339,7 @@ export default function VocabularyPage() {
               className={styles.subButtonOverride} 
               onClick={handleCopy}
             >
-              登録する
+              コピーする
             </Button>
             <Button 
               size="sm" 
@@ -259,7 +351,6 @@ export default function VocabularyPage() {
           </div>
         )}
       </section>
-      </main>
 
       {/* ランクアップ */}
       {showRankModal && currentRank && (

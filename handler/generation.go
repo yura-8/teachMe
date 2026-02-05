@@ -27,12 +27,12 @@ func NewGenerationHandler(db *gorm.DB) *GenerationHandler {
 
 func (h *GenerationHandler) TextGenerationHandler(c echo.Context) error {
 	var req struct {
-		Prompt        string  `json:"prompt"`
-		UseGemini     bool    `json:"useGemini"`
-		Level         int     `json:"level"` // 1-5: 反省度
-		UserID        uint64  `json:"userId"`
-		EmailListID   uint64  `json:"emailListId"`
-		MyEmailListID uint64  `json:"myEmailListId"`
+		Prompt        string `json:"prompt"`
+		UseGemini     bool   `json:"useGemini"`
+		Level         int    `json:"level"` // 1-5: 反省度
+		UserID        uint64 `json:"userId"`
+		EmailListID   uint64 `json:"emailListId"`
+		MyEmailListID uint64 `json:"myEmailListId"`
 	}
 
 	if err := c.Bind(&req); err != nil {
