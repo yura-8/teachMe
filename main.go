@@ -9,6 +9,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"gorm.io/gorm"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 func SeedRanks(db *gorm.DB) {
@@ -93,7 +94,7 @@ func main() {
     }
 
     if err := vocabService.RegisterVocabulary(req.UserID, req.Word, req.ProfID); err != nil {
-      return c.JSON(http.StatusInternalServerError, err)
+      return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
     }
     return c.JSON(http.StatusOK, "語彙力貯金完了！")
   })
@@ -133,7 +134,27 @@ func main() {
       return c.JSON(http.StatusOK, vocabs)
   })
 
+<<<<<<< HEAD
 	// ユーザーログイン・登録関連
+=======
+	// 語彙の削除API
+  e.DELETE("/vocabularies", func(c echo.Context) error {
+    type Request struct {
+      UserID   uint64   `json:"user_id"`
+      VocabIDs []uint64 `json:"vocab_ids"`
+    }
+    req := new(Request)
+    if err := c.Bind(req); err != nil {
+      return err
+    }
+
+    if err := vocabService.DeleteVocabularies(req.UserID, req.VocabIDs); err != nil {
+      return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+    }
+    return c.JSON(http.StatusOK, map[string]string{"message": "削除が完了しました"})
+  })
+
+>>>>>>> a5a3500 (feat: create API & front)
 	userHandler := handler.NewUserHandler(database)
 	e.POST("/api/users/login", userHandler.LoginUser)
 

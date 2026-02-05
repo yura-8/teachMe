@@ -68,3 +68,8 @@ func (s *VocabularyService) GetVocabulariesByProfessor(userID uint64, profID uin
     err := s.DB.Where("user_id = ? AND email_list_id = ?", userID, profID).Find(&vocabs).Error
     return vocabs, err
 }
+
+// 語彙の削除
+func (s *VocabularyService) DeleteVocabularies(userID uint64, vocabIDs []uint64) error {
+    return s.DB.Where("id IN ? AND user_id = ?", vocabIDs, userID).Delete(&model.Vocabulary{}).Error
+}
