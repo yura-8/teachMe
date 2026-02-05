@@ -82,22 +82,25 @@ func main() {
 
   // 語彙登録API
   e.POST("/vocabularies", func(c echo.Context) error {
-    // フロントから受け取る構造体
     type Request struct {
       UserID uint64 `json:"user_id"`
       Word   string `json:"word"`
       ProfID uint64 `json:"prof_id"`
     }
     req := new(Request)
-    if err := c.Bind(req); err != nil {
-    	return err
-    }
+    if err := c.Bind(req); err != nil { return err }
 
-    if err := vocabService.RegisterVocabulary(req.UserID, req.Word, req.ProfID); err != nil {
+    rank, err := vocabService.RegisterVocabulary(req.UserID, req.Word, req.ProfID)
+    if err != nil {
       return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
     }
-    return c.JSON(http.StatusOK, "語彙力貯金完了！")
-  })
+    
+    // ランク情報を一緒に返す
+    return c.JSON(http.StatusOK, map[string]interface{}{
+      "message": "語彙力貯金完了！",
+      "rank": rank,
+    })
+	})
 
 	// 既存の語彙を別の教授にコピー登録するAPI
   e.POST("/vocabularies/copy", func(c echo.Context) error {

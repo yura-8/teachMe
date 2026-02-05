@@ -32,6 +32,10 @@ export default function VocabularyPage() {
   const lineCount = word.split("\n").length;
   const displayRows = lineCount > 3 ? 3 : lineCount;
 
+  const [showRankModal, setShowRankModal] = useState(false);
+  const [currentRank, setCurrentRank] = useState<{content: string, image_url: string} | null>(null);
+  const [lastRankID, setLastRankID] = useState<number | null>(null);
+
   // 語彙一覧を取得
   const fetchVocabularies = async () => {
     try {
@@ -44,30 +48,50 @@ export default function VocabularyPage() {
   };
 
   useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const res = await fetch(`http://localhost:8080/users`); // ユーザー一覧から自分のランクを取得
+        const users = await res.json();
+        const me = users.find((u: any) => u.id === currentUserID);
+        if (me) {
+          setLastRankID(me.rank_id); // 初期ランクを保存
+        }
+      } catch (err) { console.error(err); }
+    };
+    fetchUserData();
     fetchVocabularies();
   }, []);
 
   // 新規登録
   const handleRegister = async () => {
-    if (!word.trim()) return;
-    try {
-      const res = await fetch("http://localhost:8080/vocabularies", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: currentUserID,
-          word: word,
-          prof_id: selectedProfID,
-        }),
-      });
-      if (res.ok) {
-        setWord("");
-        fetchVocabularies(); // 最新の全データを再取得
+  if (!word.trim()) return;
+  try {
+    const res = await fetch("http://localhost:8080/vocabularies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: currentUserID,
+        word: word,
+        prof_id: selectedProfID,
+      }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setWord("");
+      fetchVocabularies();
+
+      // ランクアップ判定：返ってきたIDが保持しているIDより大きい場合のみ
+      if (data.rank && lastRankID !== null && data.rank.id > lastRankID) {
+        setCurrentRank(data.rank);
+        setLastRankID(data.rank.id); // 次回の判定のために更新
+        setShowRankModal(true);      // モーダルを表示
+      } else if (data.rank && lastRankID === null) {
+        // 初めての登録などでIDが取れた場合は保存だけしておく
+        setLastRankID(data.rank.id);
       }
-    } catch (err) {
-      console.error("Registration error:", err);
     }
-  };
+  } catch (err) { console.error(err); }
+};
 
   // 削除機能
   const handleCheck = (id: number) => {
@@ -218,6 +242,21 @@ export default function VocabularyPage() {
           </div>
         )}
       </section>
+      {/* ランクアップ */}
+      {showRankModal && currentRank && (
+        <div className={styles.modalOverlay} onClick={() => setShowRankModal(false)}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <h2 className={styles.modalTitle}>ランクアップ！</h2>
+            <img src={currentRank.image_url} alt={currentRank.content} className={styles.rankImg} />
+            <p className={styles.modalText}>
+              あなたの知性は <strong>{currentRank.content}</strong> になりました！
+            </p>
+            <button className={styles.modalCloseButton} onClick={() => setShowRankModal(false)}>
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

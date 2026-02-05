@@ -9,36 +9,35 @@ type VocabularyService struct {
     DB *gorm.DB // 大文字にして外部から入れられるように
 }
 
-func (s *VocabularyService) RegisterVocabulary(userID uint64, word string, profID uint64) error {
-    // 重複チェック：同じユーザー、同じ教授、同じ言葉があるか確認
+func (s *VocabularyService) RegisterVocabulary(userID uint64, word string, profID uint64) (*model.Rank, error) {
+    // 重複チェック
     var existing model.Vocabulary
     err := s.DB.Where("user_id = ? AND email_list_id = ? AND word = ?", userID, profID, word).First(&existing).Error
-    
     if err == nil {
-        // 既にある場合は、保存せずに終了
-        return nil 
+        return nil, nil // 既にある場合は何もしない
     }
 
-    // 語彙の保存
-    vocab := model.Vocabulary{
-        UserID:      userID,
-        Word:        word,
-        EmailListID: profID,
-    }
+    // 保存
+    vocab := model.Vocabulary{UserID: userID, Word: word, EmailListID: profID}
     if err := s.DB.Create(&vocab).Error; err != nil {
-        return err
+        return nil, err
     }
 
-    // ランク更新ロジック
+    // ポイント計算 (1語10点)
     var count int64
     s.DB.Model(&model.Vocabulary{}).Where("user_id = ?", userID).Count(&count)
     currentPoints := uint(count * 10)
 
+    // 最適なランクを取得
     var nextRank model.Rank
-    // Pointが現在の合計値以下で、最大のPointを持つランクを取得
     s.DB.Where("point <= ?", currentPoints).Order("point DESC").First(&nextRank)
 
-    return s.DB.Model(&model.User{}).Where("id = ?", userID).Update("rank_id", nextRank.ID).Error
+    // ユーザーのRankIDを更新
+    if err := s.DB.Model(&model.User{}).Where("id = ?", userID).Update("rank_id", nextRank.ID).Error; err != nil {
+        return nil, err
+    }
+
+    return &nextRank, nil
 }
 
 func (s *VocabularyService) CopyToProfessor(userID uint64, vocabIDs []uint64, targetProfID uint64) error {
