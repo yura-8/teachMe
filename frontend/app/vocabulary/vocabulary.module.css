@@ -11,10 +11,17 @@
 /* 教授選択バッジ */
 .currentProfSelector {
   align-self: flex-start;
+  margin-top: 120px;
   margin-bottom: 20px;
   width: 100%;
   max-width: 500px;
   position: relative;
+}
+
+@media (max-width: 640px) {
+  .currentProfSelector {
+    margin-top: 72px;
+  }
 }
 
 .profBadge {
