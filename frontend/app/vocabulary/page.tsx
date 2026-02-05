@@ -154,6 +154,7 @@ export default function VocabularyPage() {
   return (
     <div className={styles.container}>
       <PageMenu items={menuItems} className="fixed left-4 top-4 z-50" />
+      <main className={styles.mainWrapper}>
       {/* 選択中の教授バッジ & セレクトメニュー */}
       <div className={styles.currentProfSelector}>
         <div 
@@ -258,6 +259,7 @@ export default function VocabularyPage() {
           </div>
         )}
       </section>
+      </main>
 
       {/* ランクアップ */}
       {showRankModal && currentRank && (
