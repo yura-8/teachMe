@@ -150,7 +150,7 @@ func generateText(ctx context.Context, useGemini bool, prompt string, slider_val
 
 		response, err := client.Models.GenerateContent(
 			ctx,
-			"gemini-3-flash-preview",
+			"gemini-2.5-flash-lite",
 			genai.Text(send_message), // prompt
 			nil,
 		)
