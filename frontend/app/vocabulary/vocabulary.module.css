@@ -17,36 +17,9 @@
   position: relative;
 }
 
-/* ドロップダウンメニューのスタイル */
-.profDropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  background: white;
-  border: 1px solid #333;
-  border-radius: 4px;
-  margin-top: 5px;
-  width: 200px;
-  z-index: 10;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-
-.profOption {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.profOption:hover {
-  background: #fef08a; /* 選択中っぽい色 */
-}
-
 .profBadge {
-  background: #fef08a;
-  border: 1px solid #eab308;
+  background: #FFF1C9 !important;
+  border: none !important;
   padding: 8px 16px;
   border-radius: 4px;
   display: inline-flex;
@@ -67,6 +40,32 @@
   font-weight: bold;
 }
 
+/* 教授一覧のドロップダウン（Cardを配置するための指定） */
+.profDropdown {
+  position: absolute;
+  top: 110%;
+  left: 0;
+  width: 200px;
+  z-index: 50;
+  overflow: hidden;
+
+  background: white !important;
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+}
+
+.profOption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.profOption:hover {
+  background: #FFF1C9 !important;
+}
+
 /* 貯金箱エリア */
 .heroSection {
   display: flex;
@@ -80,8 +79,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 20px; 
-  transform: translateX(0px); 
+  margin-top: 20px;
   width: 90%;
 }
 
@@ -93,11 +91,9 @@
   margin-bottom: 15px;
   position: relative;
   box-shadow: 4px 4px 0px rgba(0,0,0,0.1);
-  width: 90%; 
-  transition: height 0.2s ease;
+  width: 90%;
 }
 
-/* 吹き出しのしっぽ */
 .speechBubble::after {
   content: "";
   position: absolute;
@@ -109,16 +105,20 @@
   border-color: #333 transparent transparent;
 }
 
-.wordInput {
-  border: none;
-  outline: none;
-  font-size: 20px;
+/* Textareaコンポーネントを吹き出しに馴染ませる */
+.wordInputOverride {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  font-size: 1.1rem !important;
   text-align: center;
-  width: 100%;
-  background: transparent;
-  resize: none; 
-  font-family: inherit;
-  transition: height 0.2s ease;
+  padding: 0 !important;
+  resize: none;
+  min-height: 80px;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1.5;
 }
 
 .piggyImg {
@@ -126,31 +126,21 @@
   height: auto;
 }
 
-.registerButton {
-  background-color: #fef08a;
-  border: 1px solid #eab308;
-  padding: 10px 60px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
-  margin-top: 25px;
-}
-
 /* リスト部分 */
 .listSection {
-  width: 100%;
-  max-width: 500px;
+  width: 80%;
 }
 
 .profListGroup {
-  margin-bottom: 30px;
+  margin-bottom: 20px;
+  width: 100%;
 }
 
 .listHeader {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 12px;
 }
 
 .avatarMicro {
@@ -158,19 +148,6 @@
   height: 24px;
   border-radius: 50%;
   background: white;
-}
-
-.listLabel {
-  font-size: 13px;
-  color: #444;
-  font-weight: 500;
-}
-
-.tableContainer {
-  background: #fff;
-  border: 1px solid #333;
-  border-radius: 4px;
-  overflow: hidden;
 }
 
 .vocabTable {
@@ -199,36 +176,26 @@
 .actionButtons {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 12px;
+  margin-top: 16px;
 }
 
-.subButton {
-  background: #fef08a;
-  border: 1px solid #eab308;
-  padding: 6px 16px;
-  font-size: 12px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
+/* モーダル */
 .modalOverlay {
   position: fixed;
-  top: 0; left: 0;
-  width: 100vw; height: 100vh;
-  background: rgba(0,0,0,0.6);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
+  z-index: 100;
 }
 
 .modalContent {
-  background: white;
-  padding: 30px;
-  border-radius: 20px;
-  text-align: center;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  width: 90%;
+  max-width: 400px;
+  padding: 20px;
 }
 
 .rankImg {
@@ -236,4 +203,9 @@
   height: 150px;
   margin: 20px 0;
   object-fit: contain;
+}
+
+.subButtonOverride {
+  border: none !important;
+  box-shadow: none !important;
 }
