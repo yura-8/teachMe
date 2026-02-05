@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from "react";
 import styles from "./vocabulary.module.css";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Vocabulary {
   id: number;
@@ -29,9 +32,6 @@ export default function VocabularyPage() {
 
   const [isProfMenuOpen, setIsProfMenuOpen] = useState(false);
 
-  const lineCount = word.split("\n").length;
-  const displayRows = lineCount > 3 ? 3 : lineCount;
-
   const [showRankModal, setShowRankModal] = useState(false);
   const [currentRank, setCurrentRank] = useState<{content: string, image_url: string} | null>(null);
   const [lastRankID, setLastRankID] = useState<number | null>(null);
@@ -50,11 +50,11 @@ export default function VocabularyPage() {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const res = await fetch(`http://localhost:8080/users`); // ユーザー一覧から自分のランクを取得
+        const res = await fetch(`http://localhost:8080/users`); 
         const users = await res.json();
         const me = users.find((u: any) => u.id === currentUserID);
         if (me) {
-          setLastRankID(me.rank_id); // 初期ランクを保存
+          setLastRankID(me.rank_id);
         }
       } catch (err) { console.error(err); }
     };
@@ -64,34 +64,33 @@ export default function VocabularyPage() {
 
   // 新規登録
   const handleRegister = async () => {
-  if (!word.trim()) return;
-  try {
-    const res = await fetch("http://localhost:8080/vocabularies", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: currentUserID,
-        word: word,
-        prof_id: selectedProfID,
-      }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      setWord("");
-      fetchVocabularies();
+    if (!word.trim()) return;
+    try {
+      const res = await fetch("http://localhost:8080/vocabularies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: currentUserID,
+          word: word,
+          prof_id: selectedProfID,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setWord("");
+        fetchVocabularies();
 
-      // ランクアップ判定：返ってきたIDが保持しているIDより大きい場合のみ
-      if (data.rank && lastRankID !== null && data.rank.id > lastRankID) {
-        setCurrentRank(data.rank);
-        setLastRankID(data.rank.id); // 次回の判定のために更新
-        setShowRankModal(true);      // モーダルを表示
-      } else if (data.rank && lastRankID === null) {
-        // 初めての登録などでIDが取れた場合は保存だけしておく
-        setLastRankID(data.rank.id);
+        // ランクアップ判定
+        if (data.rank && lastRankID !== null && data.rank.id > lastRankID) {
+          setCurrentRank(data.rank);
+          setLastRankID(data.rank.id);
+          setShowRankModal(true);
+        } else if (data.rank && lastRankID === null) {
+          setLastRankID(data.rank.id);
+        }
       }
-    }
-  } catch (err) { console.error(err); }
-};
+    } catch (err) { console.error(err); }
+  };
 
   // 削除機能
   const handleCheck = (id: number) => {
@@ -135,7 +134,7 @@ export default function VocabularyPage() {
       });
       if (res.ok) {
         setSelectedIDs([]); 
-        fetchVocabularies(); // 最新の全データを再取得
+        fetchVocabularies();
       }
     } catch (err) {
       console.error("Copy error:", err);
@@ -143,7 +142,6 @@ export default function VocabularyPage() {
   };
 
   const currentProf = professors.find(p => p.id === selectedProfID) || professors[0];
-
   const hasAnyVocab = vocabList.length > 0;
 
   return (
@@ -159,23 +157,22 @@ export default function VocabularyPage() {
           <span className={styles.profNameLabel}>{currentProf.name} ▼</span>
         </div>
 
-        {/* 教授一覧メニュー：開いているときだけ表示 */}
         {isProfMenuOpen && (
-          <div className={styles.profDropdown}>
+          <Card className={styles.profDropdown}>
             {professors.map((p) => (
               <div 
                 key={p.id} 
                 className={styles.profOption}
                 onClick={() => {
                   setSelectedProfID(p.id);
-                  setIsProfMenuOpen(false); // 選択したら閉じる
+                  setIsProfMenuOpen(false);
                 }}
               >
                 <img src={p.avatar_url} alt="" className={styles.avatarMicro} />
                 <span>{p.name}</span>
               </div>
             ))}
-          </div>
+          </Card>
         )}
       </div>
 
@@ -183,78 +180,92 @@ export default function VocabularyPage() {
       <section className={styles.heroSection}>
         <div className={styles.piggyBankWrapper}>
           <div className={styles.speechBubble}>
-            <textarea 
+            <Textarea 
               placeholder="登録したい言葉" 
-              className={styles.wordInput}
+              className={styles.wordInputOverride}
               value={word}
               onChange={(e) => setWord(e.target.value)}
-              rows={displayRows}
+              rows={3}
             />
           </div>
           <img src="/piggy_bank.png" alt="貯金箱" className={styles.piggyImg} />
         </div>
-        <button className={styles.registerButton} onClick={handleRegister}>
+        <Button size="lg" className={styles.registerButton} onClick={handleRegister}>
           登録する
-        </button>
+        </Button>
       </section>
 
-      {/* リスト表示） */}
+      {/* リスト表示 */}
       <section className={styles.listSection}>
         {professors.map((prof) => {
           const filteredVocabs = vocabList.filter(v => v.email_list_id === prof.id);
-          
-          // 語彙がない教授のセクションはスキップ
           if (filteredVocabs.length === 0) return null;
 
           return (
-            <div key={prof.id} className={styles.profListGroup}>
-              <div className={styles.listHeader}>
+            <Card key={prof.id} className={styles.profListGroup}>
+              <CardHeader className={styles.listHeader}>
                 <img src={prof.avatar_url} alt="icon" className={styles.avatarMicro} />
-                <p className={styles.listLabel}>{prof.name}</p>
-              </div>
-              <div className={styles.tableContainer}>
-                <table className={styles.vocabTable}>
-                  <tbody>
-                    {filteredVocabs.map((item) => (
-                      <tr key={item.id}>
-                        <td className={styles.checkCol}>
-                          <input 
-                            type="checkbox" 
-                            checked={selectedIDs.includes(item.id)} 
-                            onChange={() => handleCheck(item.id)} 
-                          />
-                        </td>
-                        <td className={styles.wordCol}>{item.word}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                <CardTitle className={styles.listLabel}>{prof.name}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={styles.tableContainer}>
+                  <table className={styles.vocabTable}>
+                    <tbody>
+                      {filteredVocabs.map((item) => (
+                        <tr key={item.id}>
+                          <td className={styles.checkCol}>
+                            <input 
+                              type="checkbox" 
+                              checked={selectedIDs.includes(item.id)} 
+                              onChange={() => handleCheck(item.id)} 
+                            />
+                          </td>
+                          <td className={styles.wordCol}>{item.word}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
           );
         })}
 
-        {/* 語彙が1つでもある場合のみ、アクションボタンを表示 */}
         {hasAnyVocab && (
           <div className={styles.actionButtons}>
-            <button className={styles.subButton} onClick={handleCopy}>登録する</button>
-            <button className={styles.subButton} onClick={handleDelete}>削除する</button>
+            <Button 
+              size="sm" 
+              className={styles.subButtonOverride} 
+              onClick={handleCopy}
+            >
+              登録する
+            </Button>
+            <Button 
+              size="sm" 
+              className={styles.subButtonOverride} 
+              onClick={handleDelete}
+            >
+              削除する
+            </Button>
           </div>
         )}
       </section>
+
       {/* ランクアップ */}
       {showRankModal && currentRank && (
         <div className={styles.modalOverlay} onClick={() => setShowRankModal(false)}>
-          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
-            <h2 className={styles.modalTitle}>ランクアップ！</h2>
-            <img src={currentRank.image_url} alt={currentRank.content} className={styles.rankImg} />
-            <p className={styles.modalText}>
-              あなたの知性は <strong>{currentRank.content}</strong> になりました！
-            </p>
-            <button className={styles.modalCloseButton} onClick={() => setShowRankModal(false)}>
-              閉じる
-            </button>
-          </div>
+          <Card className={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <CardHeader>
+              <CardTitle className={styles.modalTitle}>ランクアップ！</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <img src={currentRank.image_url} alt={currentRank.content} className={styles.rankImg} />
+              <p className={styles.modalText}>
+                あなたの知性は <strong>{currentRank.content}</strong> になりました！
+              </p>
+              <Button onClick={() => setShowRankModal(false)}>閉じる</Button>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>
