@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import styles from "./vocabulary.module.css";
+import PageMenu, { type PageMenuItem } from "@/components/PageMenu";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +20,12 @@ interface Professor {
 }
 
 export default function VocabularyPage() {
+  const menuItems: PageMenuItem[] = [
+    { label: "文章生成へ", href: "/generate" },
+    { label: "語彙へ", href: "/vocabulary" },
+    { label: "ログアウト", href: "/logout" },
+  ];
+
   const [word, setWord] = useState("");
   const [professors, setProfessors] = useState<Professor[]>([
     { id: 101, name: "神部 教授", avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=prof1" },
@@ -146,6 +153,8 @@ export default function VocabularyPage() {
 
   return (
     <div className={styles.container}>
+      <PageMenu items={menuItems} className="fixed left-4 top-4 z-50" />
+      <main className={styles.mainWrapper}>
       {/* 選択中の教授バッジ & セレクトメニュー */}
       <div className={styles.currentProfSelector}>
         <div 
@@ -250,6 +259,7 @@ export default function VocabularyPage() {
           </div>
         )}
       </section>
+      </main>
 
       {/* ランクアップ */}
       {showRankModal && currentRank && (

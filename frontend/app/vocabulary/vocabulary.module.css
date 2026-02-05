@@ -1,20 +1,54 @@
 .container {
   min-height: 100vh;
-  padding: 40px 20px;
+  padding: 0px 40px 40px 100px;
   background-image: linear-gradient(to top, #fddb92 0%, #d1fdff 100%);
+  background-attachment: fixed; 
+  background-size: cover;
+
   display: flex;
   flex-direction: column;
   align-items: center;
   font-family: sans-serif;
+  justify-content: flex-start;
+  width: 100%;
+  flex-direction: row;
+}
+
+.mainWrapper {
+  flex: 1; 
+  margin-left: 100px; 
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
 }
 
 /* 教授選択バッジ */
 .currentProfSelector {
   align-self: flex-start;
+  margin-top: 0;
   margin-bottom: 20px;
   width: 100%;
   max-width: 500px;
   position: relative;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 20px 20px 40px 20px;
+  }
+
+  .mainWrapper {
+    margin-left: 0;
+    padding: 20px 0px;
+    width: 100%;
+  }
+
+  .currentProfSelector {
+    margin-top: 0;
+    align-self: center; 
+  }
 }
 
 .profBadge {
