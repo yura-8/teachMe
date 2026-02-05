@@ -8,6 +8,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 func SeedRanks(db *gorm.DB) {
@@ -44,6 +45,13 @@ func main() {
 
 	// Echoのインスタンスを作成
 	e := echo.New()
+
+	// CORS設定
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"http://localhost:3000"}, // フロントエンドのURL
+		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions, http.MethodPut, http.MethodDelete},
+		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
+	}))
 
 	// ルーティング
 	// http://localhost:8080/
@@ -83,7 +91,7 @@ func main() {
     }
 
     if err := vocabService.RegisterVocabulary(req.UserID, req.Word, req.ProfID); err != nil {
-      return c.JSON(http.StatusInternalServerError, err)
+      return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
     }
     return c.JSON(http.StatusOK, "語彙力貯金完了！")
   })
@@ -121,6 +129,23 @@ func main() {
       }
         
       return c.JSON(http.StatusOK, vocabs)
+  })
+
+	// 語彙の削除API
+  e.DELETE("/vocabularies", func(c echo.Context) error {
+    type Request struct {
+      UserID   uint64   `json:"user_id"`
+      VocabIDs []uint64 `json:"vocab_ids"`
+    }
+    req := new(Request)
+    if err := c.Bind(req); err != nil {
+      return err
+    }
+
+    if err := vocabService.DeleteVocabularies(req.UserID, req.VocabIDs); err != nil {
+      return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+    }
+    return c.JSON(http.StatusOK, map[string]string{"message": "削除が完了しました"})
   })
 
 	userHandler := handler.NewUserHandler(database)
