@@ -1,5 +1,10 @@
 @import "tailwindcss";
-@import "tw-animate-css";
+/* NOTE:
+ * `tw-animate-css` is a CSS-only package that exposes its entry via conditional exports.
+ * Some bundler/resolver combinations fail to resolve `@import "tw-animate-css";` even when installed.
+ * Import the actual file path to make resolution deterministic across environments.
+ */
+@import "../node_modules/tw-animate-css/dist/tw-animate.css";
 
 @custom-variant dark (&:is(.dark *));
 
