@@ -3,7 +3,10 @@ import PageMenu, { type PageMenuItem } from "@/components/PageMenu";
 
 export default async function GeneratePage() {
   const menuItems: PageMenuItem[] = [
-    { label: "ログインへ", href: "/login" },
+    { label: "文章生成へ", href: "/generate" },
+    { label: "メール作成へ", href: "/mail" },
+    { label: "語彙へ", href: "/vocabulary" },
+    { label: "語彙力へ", href: "/goiryoku" },
     { label: "ログアウト", href: "/logout" },
   ];
 

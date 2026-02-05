@@ -101,6 +101,7 @@ export default function MailConfirmPage() {
     { label: "文章生成へ", href: "/generate" },
     { label: "メール作成へ", href: "/mail" },
     { label: "語彙へ", href: "/vocabulary" },
+    { label: "語彙力へ", href: "/goiryoku" },
     { label: "ログアウト", href: "/logout" },
   ];
 
