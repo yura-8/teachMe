@@ -3,9 +3,18 @@
 import { useEffect, useRef } from "react";
 import Image from "next/image";
 import styles from "./goiryoku.module.css";
+import PageMenu, { type PageMenuItem } from "@/components/PageMenu";
 
 export default function GoiryokuPage() {
   const isInitialized = useRef(false);
+
+  const menuItems: PageMenuItem[] = [
+    { label: "文章生成へ", href: "/generate" },
+    { label: "メール作成へ", href: "/mail" },
+    { label: "語彙へ", href: "/vocabulary" },
+    { label: "語彙力へ", href: "/goiryoku" },
+    { label: "ログアウト", href: "/logout" },
+  ];
 
   useEffect(() => {
     if (isInitialized.current) return;
@@ -49,9 +58,20 @@ export default function GoiryokuPage() {
         });
 
         if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
+          const raw = await res.text().catch(() => "");
+          let errorData: any = {};
+          try {
+            errorData = raw ? JSON.parse(raw) : {};
+          } catch {
+            errorData = { raw };
+          }
           console.error("API Error Response:", errorData);
-          throw new Error(errorData.error || errorData.details || `API request failed with status ${res.status}`);
+          throw new Error(
+            errorData.error ||
+              errorData.details ||
+              (raw ? raw.slice(0, 200) : "") ||
+              `API request failed with status ${res.status}`,
+          );
         }
 
         const data = await res.json();
@@ -84,6 +104,7 @@ export default function GoiryokuPage() {
 
   return (
     <div className={styles.generateWrapper}>
+      <PageMenu items={menuItems} className="fixed left-4 top-4 z-50" />
       <div className={styles.simpleLayout}>
         <main className={styles.mainColumn}>
           
