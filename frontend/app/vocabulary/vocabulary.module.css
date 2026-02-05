@@ -1,0 +1,223 @@
+.container {
+  min-height: 100vh;
+  padding: 120px 20px 40px;
+  background-image: linear-gradient(to top, #fddb92 0%, #d1fdff 100%);
+  display: flex;
+  font-family: sans-serif;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+/* 教授選択バッジ */
+.currentProfSelector {
+  align-self: flex-start;
+  margin-bottom: 20px;
+  width: 100%;
+  max-width: 500px;
+  position: relative;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 88px 20px 40px;
+  }
+
+  .currentProfSelector {
+    align-self: center; 
+  }
+}
+
+.profBadge {
+  background: #FFF1C9 !important;
+  border: none !important;
+  padding: 8px 16px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatarMini {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: white;
+  border: 1px solid #ddd;
+}
+
+.profNameLabel {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+/* 教授一覧のドロップダウン（Cardを配置するための指定） */
+.profDropdown {
+  position: absolute;
+  top: 110%;
+  left: 0;
+  width: 200px;
+  z-index: 50;
+  overflow: hidden;
+
+  background: white !important;
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+}
+
+.profOption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.profOption:hover {
+  background: #FFF1C9 !important;
+}
+
+/* 貯金箱エリア */
+.heroSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 50px;
+  width: 90%;
+}
+
+.piggyBankWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 20px;
+  width: 90%;
+}
+
+.speechBubble {
+  background: #fff;
+  border: 2px solid #333;
+  border-radius: 30px;
+  padding: 15px 20px;
+  margin-bottom: 15px;
+  position: relative;
+  box-shadow: 4px 4px 0px rgba(0,0,0,0.1);
+  width: 90%;
+}
+
+.speechBubble::after {
+  content: "";
+  position: absolute;
+  bottom: -15px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 15px 15px 0;
+  border-style: solid;
+  border-color: #333 transparent transparent;
+}
+
+/* Textareaコンポーネントを吹き出しに馴染ませる */
+.wordInputOverride {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  font-size: 1.1rem !important;
+  text-align: center;
+  padding: 0 !important;
+  resize: none;
+  min-height: 80px;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1.5;
+}
+
+.piggyImg {
+  width: 180px;
+  height: auto;
+}
+
+/* リスト部分 */
+.listSection {
+  width: 80%;
+}
+
+.profListGroup {
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.listHeader {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatarMicro {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: white;
+}
+
+.vocabTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.vocabTable td {
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.vocabTable tr:last-child td {
+  border-bottom: none;
+}
+
+.checkCol {
+  width: 40px;
+  text-align: center;
+}
+
+.wordCol {
+  font-size: 14px;
+}
+
+.actionButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* モーダル */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+}
+
+.modalContent {
+  width: 90%;
+  max-width: 400px;
+  padding: 20px;
+}
+
+.rankImg {
+  width: 150px;
+  height: 150px;
+  margin: 20px 0;
+  object-fit: contain;
+}
+
+.subButtonOverride {
+  border: none !important;
+  box-shadow: none !important;
+}
