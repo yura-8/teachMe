@@ -150,7 +150,11 @@
 }
 
 .resultText {
-  white-space: pre-wrap;
+ .resultText {
+  white-space: pre-wrap; /* これでAIが送ってきた改行が反映されます */
+  line-height: 1.6;     /* 行間を少し広げると読みやすくなります */
+  /* その他のスタイル */
+}
   word-break: break-word;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 15px;
