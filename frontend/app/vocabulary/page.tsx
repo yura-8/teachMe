@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import styles from "./vocabulary.module.css";
 import PageMenu, { type PageMenuItem } from "@/components/PageMenu";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ interface Professor {
   id: number;
   name: string;
   avatar_url: string;
+  email?: string;
 }
 
 export default function VocabularyPage() {
@@ -43,16 +44,13 @@ export default function VocabularyPage() {
   ];
 
   const [word, setWord] = useState("");
-  const [professors, setProfessors] = useState<Professor[]>([
-    { id: 101, name: "神部 教授", avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=prof1" },
-    { id: 202, name: "佐藤 教授", avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=prof2" },
-  ]);
+  const [professors, setProfessors] = useState<Professor[]>([]);
   const [vocabList, setVocabList] = useState<Vocabulary[]>([]);
   const [selectedIDs, setSelectedIDs] = useState<number[]>([]);
 
   const [currentUserID, setCurrentUserID] = useState<number | null>(null);
   const [currentUserError, setCurrentUserError] = useState<string | null>(null);
-  const [selectedProfID, setSelectedProfID] = useState(101);
+  const [selectedProfID, setSelectedProfID] = useState<number | null>(null);
 
   const [isProfMenuOpen, setIsProfMenuOpen] = useState(false);
 
@@ -62,6 +60,17 @@ export default function VocabularyPage() {
   const [busy, setBusy] = useState(false);
 
   const profMenuRef = useRef<HTMLDivElement>(null);
+
+  const userToProfessor = (u: UserRow): Professor => ({
+    id: u.id,
+    email: u.email,
+    name: u.name?.trim() || u.email?.split("@")[0] || `ユーザー#${u.id}`,
+    avatar_url:
+      u.avatar_url?.trim() ||
+      `https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(
+        u.email || String(u.id),
+      )}`,
+  });
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -105,6 +114,15 @@ export default function VocabularyPage() {
         if (cancelled) return;
         setCurrentUserID(me.id);
         setLastRankID(typeof me.rank_id === "number" ? me.rank_id : null);
+
+        const userRows = Array.isArray(users) ? users : [];
+        const profRows = userRows.filter((u) => typeof u?.id === "number" && u.id !== me.id);
+        const profs = (profRows.length > 0 ? profRows : userRows).map(userToProfessor);
+        setProfessors(profs);
+        setSelectedProfID((prev) => {
+          if (typeof prev === "number" && profs.some((p) => p.id === prev)) return prev;
+          return profs.length > 0 ? profs[0].id : null;
+        });
       } catch (err) {
         if (!cancelled) {
           setCurrentUserID(null);
@@ -139,6 +157,10 @@ export default function VocabularyPage() {
     if (!word.trim()) return;
     if (!currentUserID) {
       setCurrentUserError("ログインユーザーが未確定のため登録できません。");
+      return;
+    }
+    if (!selectedProfID) {
+      setCurrentUserError("登録先ユーザーを選択してください。");
       return;
     }
     try {
@@ -228,6 +250,10 @@ export default function VocabularyPage() {
       setCurrentUserError("ログインユーザーが未確定のためコピーできません。");
       return;
     }
+    if (!selectedProfID) {
+      setCurrentUserError("コピー先ユーザーを選択してください。");
+      return;
+    }
     try {
       const res = await fetch("/api/vocabularies/copy", {
         method: "POST",
@@ -247,7 +273,29 @@ export default function VocabularyPage() {
     }
   };
 
-  const currentProf = professors.find(p => p.id === selectedProfID) || professors[0];
+  const effectiveProfessors = useMemo(() => {
+    const list = Array.isArray(professors) ? professors : [];
+    if (!Array.isArray(vocabList)) return list;
+
+    const known = new Set(list.map((p) => p.id));
+    const extraIDs = Array.from(new Set(vocabList.map((v) => v.email_list_id))).filter(
+      (id) => typeof id === "number" && !known.has(id),
+    );
+    if (extraIDs.length === 0) return list;
+
+    const extra: Professor[] = extraIDs.map((id) => ({
+      id,
+      name: `ユーザー#${id}`,
+      avatar_url: "/default.png",
+      email: undefined,
+    }));
+    return [...list, ...extra];
+  }, [professors, vocabList]);
+
+  const currentProf =
+    (typeof selectedProfID === "number"
+      ? effectiveProfessors.find((p) => p.id === selectedProfID)
+      : undefined) || effectiveProfessors[0];
   const hasAnyVocab = Array.isArray(vocabList) && vocabList.length > 0;
 
   return (
@@ -260,13 +308,19 @@ export default function VocabularyPage() {
           onClick={() => setIsProfMenuOpen(!isProfMenuOpen)}
           style={{ cursor: "pointer" }}
         >
-          <img src={currentProf.avatar_url} alt="icon" className={styles.avatarMini} />
-          <span className={styles.profNameLabel}>{currentProf.name} ▼</span>
+          <img
+            src={currentProf?.avatar_url || "/default.png"}
+            alt="icon"
+            className={styles.avatarMini}
+          />
+          <span className={styles.profNameLabel}>
+            {currentProf?.name || "ユーザー未選択"} ▼
+          </span>
         </div>
 
         {isProfMenuOpen && (
           <Card className={styles.profDropdown}>
-            {professors.map((p) => (
+            {effectiveProfessors.map((p) => (
               <div 
                 key={p.id} 
                 className={styles.profOption}
@@ -276,7 +330,12 @@ export default function VocabularyPage() {
                 }}
               >
                 <img src={p.avatar_url} alt="" className={styles.avatarMicro} />
-                <span>{p.name}</span>
+                <div style={{ display: "grid" }}>
+                  <span>{p.name}</span>
+                  {p.email ? (
+                    <span style={{ fontSize: 11, opacity: 0.7 }}>{p.email}</span>
+                  ) : null}
+                </div>
               </div>
             ))}
           </Card>
@@ -314,7 +373,7 @@ export default function VocabularyPage() {
 
       {/* リスト表示 */}
       <section className={styles.listSection}>
-        {professors.map((prof) => {
+        {effectiveProfessors.map((prof) => {
           const filteredVocabs = vocabList.filter(v => v.email_list_id === prof.id);
           if (filteredVocabs.length === 0) return null;
 
