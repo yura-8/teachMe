@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import styles from "./vocabulary.module.css";
 import PageMenu, { type PageMenuItem } from "@/components/PageMenu";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,20 @@ export default function VocabularyPage() {
   const [currentRank, setCurrentRank] = useState<{content: string, image_url: string} | null>(null);
   const [lastRankID, setLastRankID] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const profMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profMenuRef.current && !profMenuRef.current.contains(event.target as Node)) {
+        setIsProfMenuOpen(false);
+      }
+    };
+    if (isProfMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isProfMenuOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -240,7 +254,7 @@ export default function VocabularyPage() {
     <div className={styles.container}>
       <PageMenu items={menuItems} className="fixed left-4 top-4 z-50" />
       {/* 選択中の教授バッジ & セレクトメニュー */}
-      <div className={styles.currentProfSelector}>
+      <div className={styles.currentProfSelector} ref={profMenuRef}>
         <div 
           className={styles.profBadge} 
           onClick={() => setIsProfMenuOpen(!isProfMenuOpen)}
