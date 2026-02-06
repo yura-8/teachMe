@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type SentMailWithAddress struct {
@@ -36,6 +38,7 @@ func getUserID(c echo.Context, db *gorm.DB) uint64 {
 	newUser := model.User{
 		Email:     email,
 		Name:      name,
+		RankID:    1,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -46,6 +49,38 @@ func getUserID(c echo.Context, db *gorm.DB) uint64 {
 	}
 
 	return newUser.ID
+}
+
+func ensureUserByEmail(db *gorm.DB, email string, name string, avatarURL string) error {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return nil
+	}
+
+	var existing model.User
+	if err := db.Where("lower(email) = lower(?)", email).First(&existing).Error; err == nil {
+		return nil
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = strings.Split(email, "@")[0]
+	}
+
+	record := model.User{
+		Email:     email,
+		Name:      name,
+		AvatarURL: strings.TrimSpace(avatarURL),
+		RankID:    1,
+	}
+
+	// race-safe: concurrent create for same email should not fail this request
+	return db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "email"}},
+		DoNothing: true,
+	}).Create(&record).Error
 }
 
 // InitMailRoutes ルーティング登録
@@ -207,6 +242,10 @@ func CreateEmail(db *gorm.DB) echo.HandlerFunc {
 			}).Error; err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("復元失敗: %s", err.Error())})
 			}
+
+			if err := ensureUserByEmail(db, email, name, avatar); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("ユーザー作成に失敗しました: %s", err.Error())})
+			}
 			return c.JSON(http.StatusCreated, existing)
 		}
 
@@ -219,6 +258,10 @@ func CreateEmail(db *gorm.DB) echo.HandlerFunc {
 		}
 		if err := db.Create(&record).Error; err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("保存失敗: %s", err.Error())})
+		}
+
+		if err := ensureUserByEmail(db, email, name, avatar); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("ユーザー作成に失敗しました: %s", err.Error())})
 		}
 		return c.JSON(http.StatusCreated, record)
 	}
