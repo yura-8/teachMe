@@ -314,8 +314,9 @@ export default function VocabularyPage() {
             className={styles.avatarMini}
           />
           <span className={styles.profNameLabel}>
-            {currentProf?.name || "ユーザー未選択"} ▼
+            {currentProf?.name || "ユーザー未選択"}
           </span>
+          <span className={styles.profArrow}>▼</span>
         </div>
 
         {isProfMenuOpen && (

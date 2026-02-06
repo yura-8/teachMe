@@ -24,7 +24,7 @@
 .currentProfSelector {
   align-self: flex-start;
   margin-bottom: 20px;
-  width: 180px;
+  width: 190px;
   max-width: 500px;
   position: relative;
 }
@@ -48,12 +48,13 @@
 .profBadge {
   background: #FFF1C9 !important;
   border: none !important;
-  padding: 8px 16px;
+  padding: 8px 12px; /* 少しパディングを詰めると綺麗です */
   border-radius: 4px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px; /* アイコンと名前の距離 */
   width: 100%;
+  box-sizing: border-box;
 }
 
 .avatarMini {
@@ -67,6 +68,16 @@
 .profNameLabel {
   font-size: 16px;
   font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* flex: 1 は付けない（名前は左側に詰め、残りのスペースを arrow の margin で作る） */
+}
+
+.profArrow {
+  margin-left: auto; /* これで「▼」だけが右端に押し出されます */
+  font-size: 12px;
+  padding-left: 4px;
 }
 
 /* 教授一覧のドロップダウン（Cardを配置するための指定） */
