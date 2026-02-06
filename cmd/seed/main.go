@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
+	"os"
+	"path/filepath"
 	"time"
 
 	"teachMe/db"
@@ -37,6 +40,15 @@ import (
 // - prints IDs you can use when calling POST /api/generate
 func main() {
 	database := db.InitDB()
+
+	iconURLs := loadIconURLs()
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	pickIcon := func() string {
+		if len(iconURLs) == 0 {
+			return "/default.png"
+		}
+		return iconURLs[rng.Intn(len(iconURLs))]
+	}
 
 	// Ensure tables exist (same set as app, plus GenerationHistory).
 	if err := database.AutoMigrate(
@@ -91,39 +103,39 @@ func main() {
 		{
 			Name:      "Alice Seed",
 			Email:     "alice.seed@example.com",
-			AvatarURL: "/business_man.png",
+			AvatarURL: pickIcon(),
 			MyEmails: []string{
 				"alice.seed@example.com",
 				"alice.seed+univ@example.com",
 			},
 			Recipients: []seedRecipient{
-				{Name: "田中教授", Email: "tanaka.prof@example.com", AvatarURL: "/business_man_angry.png"},
-				{Name: "鈴木TA", Email: "suzuki.ta@example.com", AvatarURL: "/business_man.png"},
-				{Name: "事務局", Email: "office@example.com", AvatarURL: "/business_man.png"},
+				{Name: "田中教授", Email: "tanaka.prof@example.com", AvatarURL: pickIcon()},
+				{Name: "鈴木TA", Email: "suzuki.ta@example.com", AvatarURL: pickIcon()},
+				{Name: "事務局", Email: "office@example.com", AvatarURL: pickIcon()},
 			},
 		},
 		{
 			Name:      "Bob Seed",
 			Email:     "bob.seed@example.com",
-			AvatarURL: "/business_man_angry.png",
+			AvatarURL: pickIcon(),
 			MyEmails: []string{
 				"bob.seed@example.com",
 			},
 			Recipients: []seedRecipient{
-				{Name: "山田教授", Email: "yamada.prof@example.com", AvatarURL: "/business_man.png"},
-				{Name: "佐藤TA", Email: "sato.ta@example.com", AvatarURL: "/business_man.png"},
+				{Name: "山田教授", Email: "yamada.prof@example.com", AvatarURL: pickIcon()},
+				{Name: "佐藤TA", Email: "sato.ta@example.com", AvatarURL: pickIcon()},
 			},
 		},
 		{
 			Name:      "Carol Seed",
 			Email:     "carol.seed@example.com",
-			AvatarURL: "/business_man.png",
+			AvatarURL: pickIcon(),
 			MyEmails: []string{
 				"carol.seed@example.com",
 			},
 			Recipients: []seedRecipient{
-				{Name: "中村教授", Email: "nakamura.prof@example.com", AvatarURL: "/business_man_angry.png"},
-				{Name: "学務係", Email: "student-affairs@example.com", AvatarURL: "/business_man.png"},
+				{Name: "中村教授", Email: "nakamura.prof@example.com", AvatarURL: pickIcon()},
+				{Name: "学務係", Email: "student-affairs@example.com", AvatarURL: pickIcon()},
 			},
 		},
 	}
@@ -264,4 +276,69 @@ func main() {
 		ex := examples[0]
 		fmt.Printf("  -d '{\"prompt\":\"hi\",\"useGemini\":false,\"userId\":%d,\"emailListId\":%d,\"myEmailListId\":%d}'\n", ex.UserID, ex.EmailListID, ex.MyEmailListID)
 	}
+}
+
+func loadIconURLs() []string {
+	extOK := func(ext string) bool {
+		switch ext {
+		case ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg":
+			return true
+		default:
+			return false
+		}
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil
+	}
+
+	// When running `go run cmd/seed/main.go` from repo root, this is `frontend/public/icons`.
+	// When running from `cmd/seed`, it becomes `../frontend/public/icons`.
+	candidates := []string{
+		filepath.Join(wd, "frontend", "public", "icons"),
+		filepath.Join(wd, "..", "frontend", "public", "icons"),
+		filepath.Join(wd, "..", "..", "frontend", "public", "icons"),
+	}
+
+	var iconsDir string
+	for _, c := range candidates {
+		if st, err := os.Stat(c); err == nil && st.IsDir() {
+			iconsDir = c
+			break
+		}
+	}
+	if iconsDir == "" {
+		return nil
+	}
+
+	var urls []string
+	_ = filepath.WalkDir(iconsDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d == nil {
+			return nil
+		}
+		name := d.Name()
+		if len(name) > 0 && name[0] == '.' {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		ext := filepath.Ext(name)
+		if !extOK(ext) {
+			return nil
+		}
+		rel, err := filepath.Rel(iconsDir, path)
+		if err != nil {
+			return nil
+		}
+		rel = filepath.ToSlash(rel)
+		urls = append(urls, "/icons/"+rel)
+		return nil
+	})
+
+	return urls
 }
