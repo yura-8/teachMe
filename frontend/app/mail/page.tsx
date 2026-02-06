@@ -98,10 +98,10 @@ function applyTemplate(tpl: string, raw: string) {
 
 export default function MailConfirmPage() {
   const menuItems: PageMenuItem[] = [
-    { label: "文章生成へ", href: "/generate" },
-    { label: "メール作成へ", href: "/mail" },
-    { label: "語彙へ", href: "/vocabulary" },
-    { label: "語彙力へ", href: "/goiryoku" },
+    { label: "文章生成", href: "/generate" },
+    { label: "メール作成", href: "/mail" },
+    { label: "語彙力貯金", href: "/vocabulary" },
+    { label: "語彙力判定", href: "/goiryoku" },
     { label: "ログアウト", href: "/logout" },
   ];
 
