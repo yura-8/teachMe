@@ -13,15 +13,26 @@ import (
 
 func SeedRanks(db *gorm.DB) {
 	ranks := []model.Rank{
-		{ID: 1, Grade: 1, Point: 0, Content: "アメーバ級", ImageURL: "url1"},
-		{ID: 2, Grade: 2, Point: 50, Content: "一般学生級", ImageURL: "url2"},
-		{ID: 3, Grade: 3, Point: 150, Content: "准教授級", ImageURL: "url3"},
-		{ID: 4, Grade: 4, Point: 300, Content: "文豪級", ImageURL: "url4"},
+		{ID: 1, Grade: 1, Point: 0, Content: "アメーバ級", ImageURL: "/rank1.png"},
+		{ID: 2, Grade: 2, Point: 50, Content: "一般学生級", ImageURL: "/rank2.png"},
+		{ID: 3, Grade: 3, Point: 150, Content: "准教授級", ImageURL: "/rank3.png"},
+		{ID: 4, Grade: 4, Point: 300, Content: "文豪級", ImageURL: "/rank4.png"},
 	}
 
 	for _, r := range ranks {
-		// IDがなければ作成、あれば更新（FirstOrCreateでも可）
-		db.FirstOrCreate(&r, model.Rank{ID: r.ID})
+		// 既存があれば更新して、frontend/public の画像パスが反映されるようにする
+		res := db.Model(&model.Rank{}).Where("id = ?", r.ID).Updates(map[string]any{
+			"grade":     r.Grade,
+			"point":     r.Point,
+			"content":   r.Content,
+			"image_url": r.ImageURL,
+		})
+		if res.Error != nil {
+			continue
+		}
+		if res.RowsAffected == 0 {
+			_ = db.Create(&r).Error
+		}
 	}
 }
 

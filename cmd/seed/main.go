@@ -70,16 +70,16 @@ func main() {
 	if err := database.Model(&model.Rank{}).Count(&rankCount).Error; err != nil {
 		log.Fatalf("count ranks failed: %v", err)
 	}
-	if rankCount == 0 {
-		ranks := []model.Rank{
-			{Grade: 1, ImageURL: "https://example.com/rank1.png", Content: "Starter", Point: 0},
-			{Grade: 2, ImageURL: "https://example.com/rank2.png", Content: "Intermediate", Point: 100},
-			{Grade: 3, ImageURL: "https://example.com/rank3.png", Content: "Advanced", Point: 300},
-		}
-		if err := database.Create(&ranks).Error; err != nil {
-			log.Fatalf("create ranks failed: %v", err)
-		}
-	}
+	// if rankCount == 0 {
+	// 	ranks := []model.Rank{
+	// 		{Grade: 1, ImageURL: "https://example.com/rank1.png", Content: "Starter", Point: 0},
+	// 		{Grade: 2, ImageURL: "https://example.com/rank2.png", Content: "Intermediate", Point: 100},
+	// 		{Grade: 3, ImageURL: "https://example.com/rank3.png", Content: "Advanced", Point: 300},
+	// 	}
+	// 	if err := database.Create(&ranks).Error; err != nil {
+	// 		log.Fatalf("create ranks failed: %v", err)
+	// 	}
+	// }
 
 	var rank model.Rank
 	if err := database.Order("id asc").First(&rank).Error; err != nil {
