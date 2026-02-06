@@ -62,6 +62,7 @@ export default function GenerateClient() {
   const [subject, setSubject] = useState<string>("");
   const [body, setBody] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [errorOpen, setErrorOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const selectedSenderUser =
@@ -178,6 +179,7 @@ export default function GenerateClient() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setErrorOpen(false);
     setSentJson(null);
     setResultJson(null);
     setSubject("");
@@ -185,6 +187,7 @@ export default function GenerateClient() {
 
     try {
       if (!senderUserId || !myEmailListId || !emailListId) {
+        setErrorOpen(true);
         setError(
           "MyEmailList（自分のEmail） / 宛先（User / Email）を選択してください（アイコンから選択）",
         );
@@ -212,6 +215,7 @@ export default function GenerateClient() {
       if (!res.ok) {
         const maybeError =
           typeof data?.error === "string" ? data.error : undefined;
+        setErrorOpen(true);
         setError(maybeError ?? `Request failed: ${res.status}`);
         return;
       }
@@ -223,6 +227,7 @@ export default function GenerateClient() {
       setSubject(maybeSubject);
       setBody(maybeBody);
     } catch (err) {
+      setErrorOpen(true);
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoading(false);
@@ -366,13 +371,45 @@ export default function GenerateClient() {
             </div>
           ) : null}
 
-          {error ? (
-            <div className="rounded-2xl border border-red-600/20 bg-red-600/[0.06] px-4 py-3 text-sm text-red-900/80">
-              {error}
-            </div>
-          ) : null}
+          {/* inline error box removed; show popup instead */}
         </CardContent>
       </Card>
+
+      {errorOpen && error ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default bg-black/30"
+            onClick={() => {
+              setErrorOpen(false);
+              setError(null);
+            }}
+            aria-label="close error"
+          />
+
+          <Card className="relative w-full max-w-[520px] overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between gap-3">
+              <CardTitle className="text-sm text-zinc-900/70">エラー</CardTitle>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setErrorOpen(false);
+                  setError(null);
+                }}
+              >
+                閉じる
+              </Button>
+            </CardHeader>
+
+            <CardContent className="pb-6">
+              <div className="whitespace-pre-wrap break-words text-sm text-zinc-900/80">
+                {error}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
 
       {settingsOpen ? (
         <div className="fixed inset-0 z-50">
