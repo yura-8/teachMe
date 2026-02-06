@@ -235,12 +235,22 @@
   width: 90%;
   max-width: 400px;
   padding: 20px;
+  text-align: center;
+}
+
+.modalTitle {
+  text-align: center;
+}
+
+.modalText {
+  text-align: center;
 }
 
 .rankImg {
   width: 150px;
   height: 150px;
-  margin: 20px 0;
+  display: block;
+  margin: 20px auto;
   object-fit: contain;
 }
 
