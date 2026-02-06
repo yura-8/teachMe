@@ -47,6 +47,11 @@ type SentMail = {
   from_email?: string;
 };
 
+type IconPreset = {
+  name: string;
+  url: string;
+};
+
 const API_BASE = "http://localhost:8080";
 const TEMPLATE_MARKER = "{{BODY}}";
 
@@ -166,6 +171,15 @@ export default function MailConfirmPage() {
   // New Recipient Inputs
   const [pendingToEmail, setPendingToEmail] = useState("");
   const [pendingToName, setPendingToName] = useState("");
+  const [pendingToAvatarMode, setPendingToAvatarMode] = useState<
+    "auto" | "url" | "preset"
+  >("auto");
+  const [pendingToAvatarUrl, setPendingToAvatarUrl] = useState("");
+  const [pendingToAvatarPreset, setPendingToAvatarPreset] =
+    useState("/default.png");
+  const [iconPresets, setIconPresets] = useState<IconPreset[]>([]);
+  const [iconPresetsLoading, setIconPresetsLoading] = useState(false);
+  const [iconPresetsError, setIconPresetsError] = useState<string | null>(null);
 
   // History State
   const [history, setHistory] = useState<SentMail[]>([]);
@@ -283,6 +297,48 @@ export default function MailConfirmPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userEmail]);
 
+  const loadIconPresets = async () => {
+    if (iconPresetsLoading) return;
+    try {
+      setIconPresetsLoading(true);
+      setIconPresetsError(null);
+      const res = await fetch("/api/icons", { method: "GET", cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      const icons = Array.isArray(data?.icons) ? (data.icons as IconPreset[]) : [];
+      setIconPresets(
+        icons.filter((i) => typeof i?.url === "string" && typeof i?.name === "string"),
+      );
+    } catch (e) {
+      setIconPresets([]);
+      setIconPresetsError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIconPresetsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!showRecipientMeta) return;
+    if (iconPresets.length > 0) return;
+    loadIconPresets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showRecipientMeta]);
+
+  useEffect(() => {
+    if (!showRecipientMeta) return;
+    if (pendingToAvatarMode !== "preset") return;
+    if (iconPresets.length > 0) return;
+    loadIconPresets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showRecipientMeta, pendingToAvatarMode]);
+
+  useEffect(() => {
+    if (!showRecipientMeta) return;
+    if (iconPresets.length === 0) return;
+    setPendingToAvatarPreset((prev) =>
+      iconPresets.some((p) => p.url === prev) ? prev : iconPresets[0].url,
+    );
+  }, [showRecipientMeta, iconPresets]);
+
   // --- Actions ---
 
   const saveRecipient = async () => {
@@ -294,7 +350,11 @@ export default function MailConfirmPage() {
     // 新規登録の準備
     setPendingToEmail(email);
     setPendingToName("");
+    setPendingToAvatarMode("auto");
+    setPendingToAvatarUrl("");
+    setPendingToAvatarPreset("/default.png");
     setShowRecipientMeta(true);
+    loadIconPresets();
     setOpenTo(false);
   };
 
@@ -305,12 +365,18 @@ export default function MailConfirmPage() {
     if (exists) { alert("この宛先は既に登録されています"); setShowRecipientMeta(false); return; }
 
     const autoAvatarUrl = `https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(email)}`;
+    const chosenAvatarUrl =
+      pendingToAvatarMode === "url" && pendingToAvatarUrl.trim()
+        ? pendingToAvatarUrl.trim()
+        : pendingToAvatarMode === "preset"
+          ? pendingToAvatarPreset
+          : autoAvatarUrl;
 
     const payload = { 
       // user_id はバックエンドが X-User-Email から自動判定するので不要
       email, 
       name: pendingToName.trim(), 
-      avatar_url: autoAvatarUrl
+      avatar_url: chosenAvatarUrl,
     };
 
     try {
@@ -668,11 +734,106 @@ export default function MailConfirmPage() {
                     <span className={styles.label}>新規登録: {pendingToEmail}</span>
                     <button onClick={() => setShowRecipientMeta(false)}><X size={18}/></button>
                   </div>
-                  <div className={styles.row}>
-                    <input className={styles.input} placeholder="名前 (例: 田中教授)" value={pendingToName} onChange={e => setPendingToName(e.target.value)} />
-                    <button className={styles.actionBtn} onClick={confirmSaveRecipient}>登録</button>
+                  <div className={styles.row} style={{ gap: 10, alignItems: "flex-start" }}>
+                    <div style={{ flex: 1, display: "grid", gap: 8 }}>
+                      <input className={styles.input} placeholder="名前 (例: 田中教授)" value={pendingToName} onChange={e => setPendingToName(e.target.value)} />
+
+                      <div style={{ display: "grid", gap: 6 }}>
+                        <div className={styles.textSmall} style={{ fontWeight: 600 }}>アイコン</div>
+                        <div className={styles.row} style={{ gap: 10 }}>
+                          <label className={styles.textSmall}>
+                            <input
+                              type="radio"
+                              name="pendingAvatarMode"
+                              checked={pendingToAvatarMode === "auto"}
+                              onChange={() => setPendingToAvatarMode("auto")}
+                            />{" "}
+                            自動生成
+                          </label>
+                          <label className={styles.textSmall}>
+                            <input
+                              type="radio"
+                              name="pendingAvatarMode"
+                              checked={pendingToAvatarMode === "preset"}
+                              onChange={() => setPendingToAvatarMode("preset")}
+                            />{" "}
+                            プリセット
+                          </label>
+                          <label className={styles.textSmall}>
+                            <input
+                              type="radio"
+                              name="pendingAvatarMode"
+                              checked={pendingToAvatarMode === "url"}
+                              onChange={() => setPendingToAvatarMode("url")}
+                            />{" "}
+                            URL指定
+                          </label>
+                        </div>
+
+                        {pendingToAvatarMode === "preset" ? (
+                          <select
+                            className={styles.select}
+                            value={pendingToAvatarPreset}
+                            onChange={(e) => setPendingToAvatarPreset(e.target.value)}
+                          >
+                            {iconPresets.length > 0 ? (
+                              iconPresets.map((p) => (
+                                <option key={p.url} value={p.url}>
+                                  {p.name}
+                                </option>
+                              ))
+                            ) : (
+                              <option value="/default.png">
+                                {iconPresetsLoading
+                                  ? "（読み込み中…）"
+                                  : "（icons が見つかりません）"}{" "}
+                                default.png
+                              </option>
+                            )}
+                          </select>
+                        ) : null}
+
+                        {pendingToAvatarMode === "url" ? (
+                          <input
+                            className={styles.input}
+                            placeholder="https://... (画像URL)"
+                            value={pendingToAvatarUrl}
+                            onChange={(e) => setPendingToAvatarUrl(e.target.value)}
+                          />
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gap: 8, justifyItems: "center" }}>
+                      <img
+                        src={
+                          pendingToAvatarMode === "url" && pendingToAvatarUrl.trim()
+                            ? pendingToAvatarUrl.trim()
+                            : pendingToAvatarMode === "preset"
+                              ? pendingToAvatarPreset
+                              : `https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(pendingToEmail)}`
+                        }
+                        alt="preview"
+                        style={{
+                          width: 56,
+                          height: 56,
+                          borderRadius: 14,
+                          border: "1px solid rgba(0,0,0,0.1)",
+                          background: "#fff",
+                          objectFit: "cover",
+                        }}
+                      />
+                      <button className={styles.actionBtn} onClick={confirmSaveRecipient} disabled={busy}>登録</button>
+                    </div>
                   </div>
-                  <div className={styles.textSmall} style={{marginTop:8}}>※ アイコンはメールアドレスから自動生成されます</div>
+                  <div className={styles.textSmall} style={{marginTop:8}}>
+                    ※ 画像は URL 指定 or プリセットから選択できます（未指定なら自動生成）
+                    {iconPresetsError ? (
+                      <div style={{ marginTop: 6, color: "#d32f2f" }}>
+                        アイコン一覧の読み込みに失敗しました: {iconPresetsError}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               )}
             </div>
