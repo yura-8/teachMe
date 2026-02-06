@@ -34,6 +34,7 @@ type GenerateAndSaveResult struct {
 	History *model.GenerationHistory
 	Draft   MailDraft
 	Raw     string
+	Prompt  string
 }
 
 func (s *GenerationService) GenerateAndSave(
@@ -44,8 +45,10 @@ func (s *GenerationService) GenerateAndSave(
 	userID uint64,
 	emailListID uint64,
 	myEmailListID uint64,
+	vocabHint string,
 ) (*GenerateAndSaveResult, error) {
-	raw, err := generateText(ctx, useGemini, prompt, sliderValue)
+	finalPrompt := generatePrompt(prompt, sliderValue, vocabHint)
+	raw, err := generateText(ctx, useGemini, finalPrompt, sliderValue)
 	if err != nil {
 		return nil, err
 	}
@@ -68,10 +71,11 @@ func (s *GenerationService) GenerateAndSave(
 		History: gh,
 		Draft:   draft,
 		Raw:     raw,
+		Prompt:  finalPrompt,
 	}, nil
 }
 
-func generatePrompt(prompt string, slider_value int) string {
+func generatePrompt(prompt string, slider_value int, vocabHint string) string {
 	// sliderの値（5段階）によって反省度を変える
 	base_prompt := "指示: ユーザーから入力された「本音（言い訳）」を、変換ルールに応じて、大学教授に送るための論理的かつ誠実な文章に変換してください。"
 
@@ -88,6 +92,10 @@ func generatePrompt(prompt string, slider_value int) string {
 		base_prompt += "「教授の貴重なご指導の機会を無下にし、信頼を著しく損ねた」という、相手への影響を強調する重い表現。"
 	} else if slider_value == 5 {
 		base_prompt += "「学問を志す身としてあるまじき失態であり、万死に値する」といった、辞世の句のような悲壮感漂う表現。"
+	}
+
+	if strings.TrimSpace(vocabHint) != "" {
+		base_prompt += "\n" + strings.TrimSpace(vocabHint) + "\n"
 	}
 
 	base_prompt += "制約事項:本音（寝坊、忘れていた等）をそのまま書かず、医学的、心理学的、または論理的な語彙（例：概日リズム、情報処理のボトルネック、不可抗力的なリソース不足）に変換すること。出力は必ず次のJSON構造で出力すること。"
@@ -136,7 +144,7 @@ func generatePrompt(prompt string, slider_value int) string {
 	return fmt.Sprintf("%s", base_prompt)
 }
 
-func generateText(ctx context.Context, useGemini bool, prompt string, slider_value int) (string, error) {
+func generateText(ctx context.Context, useGemini bool, finalPrompt string, slider_value int) (string, error) {
 	if useGemini {
 		_ = godotenv.Load()
 
@@ -146,12 +154,10 @@ func generateText(ctx context.Context, useGemini bool, prompt string, slider_val
 			return "", fmt.Errorf("error creating Gemini client: %w", err)
 		}
 
-		send_message := generatePrompt(prompt, slider_value)
-
 		response, err := client.Models.GenerateContent(
 			ctx,
 			"gemini-2.5-flash-lite",
-			genai.Text(send_message), // prompt
+			genai.Text(finalPrompt), // prompt
 			nil,
 		)
 		if err != nil {
