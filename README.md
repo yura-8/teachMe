@@ -36,7 +36,7 @@ ProtoPedia: https://protopedia.net/prototype/8195
 
 前提:
 
-- Docker / Docker Compose が使えること
+- Docker が使えること
 - Google OAuth クライアントが作成済みであること
 
 1. 環境変数を設定
@@ -55,14 +55,13 @@ AUTH_GOOGLE_SECRET=your-google-client-secret
 GEMINI_API_KEY=your-gemini-api-key
 ```
 
-1. コンテナ起動
+2. コンテナ起動
 
 ```bash
 docker compose up --build
 ```
 
-3. アクセス
-
-- フロントエンド: `http://localhost:3000`
-- バックエンド: `http://localhost:8080`
-- PostgreSQL: `localhost:5432`
+3. ログインページにアクセス
+```
+http://localhost:3000/login
+```
